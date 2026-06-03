@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 concurrency:
   group: metrics-${{ github.ref }}
@@ -23,6 +24,7 @@ jobs:
         uses: lowlighter/metrics@latest
         with:
           filename: github-metrics.svg
+          output_action: pull-request
           token: ${{ secrets.METRICS_TOKEN || secrets.GITHUB_TOKEN }}
           user: thinkyou0714
           template: classic
