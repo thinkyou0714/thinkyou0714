@@ -231,3 +231,81 @@ test("onRequest/onResponse hooks and the retry logger fire", async () => {
   assert.equal(logs.length, 1);
   assert.equal(logs[0].meta?.code, "rate_limit");
 });
+
+// ---------------------------------------------------------------- review fixes
+
+test("runTools relaxes toolChoice 'required' to 'auto' after the first turn", async () => {
+  const { fn, calls } = queueFetch([
+    () =>
+      jsonResponse({
+        choices: [
+          {
+            message: {
+              role: "assistant",
+              content: null,
+              tool_calls: [{ id: "t1", function: { name: "noop", arguments: "{}" } }],
+            },
+          },
+        ],
+      }),
+    () =>
+      jsonResponse({ choices: [{ message: { role: "assistant", content: "done" }, finish_reason: "stop" }] }),
+  ]);
+  const res = await newClient(fn).runTools([{ role: "user", content: "go" }], {
+    tools: [functionTool("noop")],
+    toolChoice: "required",
+    handlers: { noop: () => ({ ok: true }) },
+  });
+  assert.equal(res.text, "done");
+  assert.equal(JSON.parse(calls[0].body).tool_choice, "required");
+  assert.equal(JSON.parse(calls[1].body).tool_choice, "auto"); // relaxed so it can finish
+});
+
+test("respondJson merges schema into a caller-provided params.text", async () => {
+  const { fn, calls } = fixedFetch(() => jsonResponse({ output_text: '{"ok":true}' }));
+  await newClient(fn).respondJson("x", {
+    schema: { type: "object", properties: { ok: { type: "boolean" } } },
+    params: { text: { verbosity: "low" } },
+  });
+  const body = JSON.parse(calls[0].body);
+  assert.equal(body.text.verbosity, "low"); // sibling preserved
+  assert.equal(body.text.format.type, "json_schema");
+});
+
+test("runTools turns a missing/throwing handler into an error tool message", async () => {
+  const { fn, calls } = queueFetch([
+    () =>
+      jsonResponse({
+        choices: [
+          {
+            message: {
+              role: "assistant",
+              content: null,
+              tool_calls: [
+                { id: "t1", function: { name: "boom", arguments: "{}" } },
+                { id: "t2", function: { name: "missing", arguments: "{}" } },
+              ],
+            },
+          },
+        ],
+      }),
+    () =>
+      jsonResponse({
+        choices: [{ message: { role: "assistant", content: "recovered" }, finish_reason: "stop" }],
+      }),
+  ]);
+  const res = await newClient(fn).runTools([{ role: "user", content: "go" }], {
+    tools: [functionTool("boom"), functionTool("missing")],
+    handlers: {
+      boom: () => {
+        throw new Error("kaboom");
+      },
+    },
+  });
+  assert.equal(res.text, "recovered");
+  const msgs = JSON.parse(calls[1].body).messages as Array<{ role?: string; content?: string }>;
+  const toolMsgs = msgs.filter((m) => m.role === "tool");
+  assert.equal(toolMsgs.length, 2);
+  assert.match(JSON.parse(toolMsgs[0].content ?? "{}").error, /kaboom/);
+  assert.match(JSON.parse(toolMsgs[1].content ?? "{}").error, /No handler/);
+});

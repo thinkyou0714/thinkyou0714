@@ -219,7 +219,11 @@ export class FuguClient {
       const start = Date.now();
       const body: Record<string, unknown> = { ...(opts.params ?? {}), model, messages: conversation };
       if (tools) body.tools = tools;
-      if (opts.toolChoice) body.tool_choice = opts.toolChoice;
+      // Force the tool on the first turn only; relax "required" to "auto" afterwards so the
+      // model can produce a final answer instead of being forced to call a tool every turn.
+      if (opts.toolChoice) {
+        body.tool_choice = i === 0 || opts.toolChoice !== "required" ? opts.toolChoice : "auto";
+      }
       if (opts.reasoningEffort) body.reasoning = { effort: opts.reasoningEffort };
       this.applyOutputCap(body, "max_completion_tokens", opts);
       const { json, requestId } = await this.request("/chat/completions", body, model, opts);
@@ -257,6 +261,9 @@ export class FuguClient {
    * Structured output with a validate-and-repair loop. Requests a JSON schema (if given),
    * parses loosely, runs `validate`, and on failure feeds the error back up to
    * `repairAttempts` times (default 1) before throwing FuguValidationError.
+   *
+   * Without `validate`, the parsed value is returned as `T` WITHOUT a runtime check —
+   * rely on the strict json_schema (when `schema` is set) or pass a `validate` guard.
    */
   async respondJson<T = unknown>(
     input: string,
@@ -270,7 +277,11 @@ export class FuguClient {
     const repairAttempts = opts.repairAttempts ?? 1;
     const params: Record<string, unknown> = { ...(opts.params ?? {}) };
     if (opts.schema) {
+      // Merge into any caller-provided `text` block (e.g. text.verbosity) rather than clobber it.
+      const existingText =
+        params.text && typeof params.text === "object" ? (params.text as Record<string, unknown>) : {};
       params.text = {
+        ...existingText,
         format: { type: "json_schema", name: opts.schemaName ?? "output", strict: true, schema: opts.schema },
       };
     }

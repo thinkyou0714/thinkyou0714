@@ -86,6 +86,9 @@ export function parseToolCalls(raw: unknown): FuguToolCall[] {
       }
     }
   }
+  // A real response is only ever one API shape; if Responses tool calls were found,
+  // don't also scan the Chat shape (avoids double-counting a forward-compat dual payload).
+  if (calls.length > 0) return calls;
 
   const choices = getProp(raw, "choices");
   if (Array.isArray(choices) && choices[0]) {
