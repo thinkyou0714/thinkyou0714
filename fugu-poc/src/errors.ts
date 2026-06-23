@@ -20,7 +20,8 @@ export type FuguErrorCode =
   | "connection"
   | "aborted"
   | "parse"
-  | "incomplete";
+  | "incomplete"
+  | "budget";
 
 /** Whitelisted, length-capped view of an API error envelope. Never the raw body. */
 export interface ParsedApiError {
@@ -133,6 +134,12 @@ export class FuguIncompleteError extends FuguError {
   constructor(message: string, options: FuguErrorOptions = {}) {
     super(message, "incomplete", options);
     this.name = "FuguIncompleteError";
+  }
+}
+export class FuguBudgetError extends FuguError {
+  constructor(message: string, options: FuguErrorOptions = {}) {
+    super(message, "budget", options);
+    this.name = "FuguBudgetError";
   }
 }
 

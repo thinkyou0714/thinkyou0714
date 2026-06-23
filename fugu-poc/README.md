@@ -20,6 +20,12 @@ to answer directly or to delegate to and synthesize a team of expert frontier mo
 - **Typed usage + cost**, including Fugu's hidden, billed **orchestration tokens**.
 - **Effort-scaled timeouts** (`reasoning.effort` ∈ `high | xhigh | max`) and
   `status` / `incomplete` / `finishReason` surfaced (no silent empty strings).
+- **Resilient transport:** retries with exponential backoff + jitter honoring
+  `Retry-After`, a stable `Idempotency-Key` across retries, timeout/abort/network
+  classification.
+- **Streaming** (`respondStream` / `chatStream`) over SSE — zero-dep.
+- **Cost controls:** a `BudgetGuard` spend circuit-breaker, output-token + input-size
+  caps, and `chooseModel()` routing (`fugu` ↔ `fugu-ultra`).
 
 ## Install
 
@@ -56,6 +62,20 @@ try {
 }
 ```
 
+### Streaming + budget + routing
+
+```ts
+import { createClient, loadConfig, BudgetGuard, chooseModel } from "fugu-poc";
+
+const client = createClient(loadConfig(), { budget: new BudgetGuard({ limitUsd: 5 }) });
+const model = chooseModel({ chars: prompt.length, task: "code" }); // fugu ↔ fugu-ultra
+
+for await (const ev of client.respondStream(prompt, { model })) {
+  if (ev.type === "delta") process.stdout.write(ev.textDelta ?? "");
+  else console.log("\n", ev.result?.costUsd, ev.result?.usage);
+}
+```
+
 ### Optional OpenAI-SDK adapter
 
 ```ts
@@ -88,10 +108,14 @@ fugu-poc/
 │   ├── redact.ts       # secret redaction
 │   ├── types.ts        # FuguResult / FuguUsage + tolerant parsers
 │   ├── pricing.ts      # price table + cost estimation
-│   ├── fugu-client.ts  # FuguClient: respond() / chat()
+│   ├── fugu-client.ts  # FuguClient: respond() / chat() / *Stream()
+│   ├── retry.ts        # backoff + jitter + Retry-After
+│   ├── budget.ts       # BudgetGuard spend circuit-breaker
+│   ├── routing.ts      # chooseModel() policy
+│   ├── stream.ts       # SSE parsing
 │   ├── cli.ts          # CLI (bin: fugu)
 │   └── openai.ts       # optional ./openai adapter
-├── test/               # fugu-client.test.ts, timeout.test.ts
+├── test/               # fugu-client / timeout / p2 tests
 ├── .github/workflows/  # ci / release (changesets + npm OIDC) / codeql (templates)
 └── tsdown.config.ts · biome.json · .changeset · tsconfig.json
 ```

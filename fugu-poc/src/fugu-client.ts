@@ -1,30 +1,37 @@
 /**
- * Minimal Fugu API client (OpenAI-compatible).
- * Uses the built-in global `fetch` — no runtime dependencies.
+ * Fugu API client (OpenAI-compatible). Built-in global `fetch` — no runtime deps.
  *
- *   - POST /responses          (Responses API — recommended by Sakana for generation)
+ *   - POST /responses          (Responses API — recommended for generation)
  *   - POST /chat/completions   (Chat Completions API)
  *
- * P0 hardening: typed error hierarchy, secret redaction, timeout-vs-abort-vs-network
- * classification, effort-scaled timeouts, and typed usage + cost (incl. Fugu's hidden
- * orchestration tokens) — instead of a single stringly-typed error and an `unknown` usage.
+ * P0: typed error hierarchy, secret redaction, timeout/abort/network classification,
+ *     effort-scaled timeouts, typed usage + cost (incl. Fugu orchestration tokens).
+ * P2: retries (backoff + jitter, honoring Retry-After) with an idempotency key,
+ *     streaming (SSE), a spend BudgetGuard, and output-token / input-size caps.
  */
 
+import { randomUUID } from "node:crypto";
 import { normalizeBaseUrl, defaultTimeoutMs } from "./config.ts";
 import type { FuguConfig, ReasoningEffort } from "./config.ts";
 import {
+  FuguError,
   FuguConfigError,
   FuguConnectionError,
   FuguTimeoutError,
   FuguAbortError,
   FuguParseError,
   FuguIncompleteError,
+  FuguBadRequestError,
   errorFromResponse,
 } from "./errors.ts";
 import { computeCost, DEFAULT_PRICES } from "./pricing.ts";
 import type { PriceTable } from "./pricing.ts";
 import { parseUsage, parseResponseMeta, extractResponsesText, extractChatText } from "./types.ts";
 import type { FuguResult } from "./types.ts";
+import { DEFAULT_RETRY, retryDelayMs, sleep } from "./retry.ts";
+import type { RetryConfig } from "./retry.ts";
+import { parseSSE, extractStreamDelta, extractStreamFinal } from "./stream.ts";
+import type { BudgetGuard } from "./budget.ts";
 
 export type { FuguResult, FuguUsage, ResponseStatus } from "./types.ts";
 export * from "./errors.ts";
@@ -36,6 +43,17 @@ export interface FuguClientOptions extends FuguConfig {
   timeoutMs?: number;
   /** Price table for cost estimation (defaults to the built-in table). */
   priceTable?: PriceTable;
+  /** Max retries after the first attempt for transient failures (default 2). */
+  maxRetries?: number;
+  /** Backoff base / cap (ms) — full-jitter exponential backoff (defaults 500 / 8000). */
+  retryBaseMs?: number;
+  retryMaxMs?: number;
+  /** Hard cap applied to requested max output tokens. */
+  maxOutputTokens?: number;
+  /** Reject inputs longer than this many characters (default 4,000,000; 0 disables). */
+  maxInputChars?: number;
+  /** Optional spend guard; throws FuguBudgetError once the limit would be exceeded. */
+  budget?: BudgetGuard;
 }
 
 export interface GenerateOptions {
@@ -49,6 +67,12 @@ export interface GenerateOptions {
   signal?: AbortSignal;
   /** Override the timeout for this call (ms). */
   timeoutMs?: number;
+  /** Override the retry count for this call. */
+  maxRetries?: number;
+  /** Per-call output-token cap (clamped to the client's maxOutputTokens). */
+  maxOutputTokens?: number;
+  /** Reuse a specific Idempotency-Key (defaults to a fresh UUID per logical request). */
+  idempotencyKey?: string;
   /** Throw FuguIncompleteError when the response status is "incomplete". */
   throwOnIncomplete?: boolean;
   /** Extra body params merged into the request (e.g. { temperature: 0.2 }). */
@@ -60,6 +84,14 @@ export type ChatRole = "system" | "developer" | "user" | "assistant";
 export interface ChatMessage {
   role: ChatRole;
   content: string;
+}
+
+export interface FuguStreamEvent {
+  type: "delta" | "done";
+  /** Present on "delta" events: the incremental text. */
+  textDelta?: string;
+  /** Present on the terminal "done" event: the aggregated result. */
+  result?: FuguResult;
 }
 
 interface RawResponse {
@@ -74,6 +106,10 @@ export class FuguClient {
   private readonly fetchImpl: typeof fetch;
   private readonly timeoutOverrideMs?: number;
   private readonly priceTable: PriceTable;
+  private readonly retry: RetryConfig;
+  private readonly maxOutputTokens?: number;
+  private readonly maxInputChars: number;
+  private readonly budget?: BudgetGuard;
 
   constructor(options: FuguClientOptions) {
     this.apiKey = (options.apiKey ?? "").trim();
@@ -82,6 +118,14 @@ export class FuguClient {
     this.fetchImpl = options.fetch ?? globalThis.fetch;
     this.timeoutOverrideMs = options.timeoutMs;
     this.priceTable = options.priceTable ?? DEFAULT_PRICES;
+    this.retry = {
+      maxRetries: options.maxRetries ?? DEFAULT_RETRY.maxRetries,
+      baseMs: options.retryBaseMs ?? DEFAULT_RETRY.baseMs,
+      maxMs: options.retryMaxMs ?? DEFAULT_RETRY.maxMs,
+    };
+    this.maxOutputTokens = options.maxOutputTokens;
+    this.maxInputChars = options.maxInputChars ?? 4_000_000;
+    this.budget = options.budget;
     if (typeof this.fetchImpl !== "function") {
       throw new FuguConfigError("No fetch implementation available. Use Node >= 18 or pass options.fetch.");
     }
@@ -89,21 +133,68 @@ export class FuguClient {
 
   /** Responses API (recommended). `input` is the user prompt. */
   async respond(input: string, opts: GenerateOptions = {}): Promise<FuguResult> {
+    this.guardInput(input.length);
     const model = opts.model ?? this.model;
     const body: Record<string, unknown> = { ...(opts.params ?? {}), model, input };
     if (opts.instructions) body.instructions = opts.instructions;
     if (opts.reasoningEffort) body.reasoning = { effort: opts.reasoningEffort };
+    this.applyOutputCap(body, "max_output_tokens", opts);
     const { json, requestId } = await this.request("/responses", body, model, opts);
     return this.buildResult(json, model, extractResponsesText(json), requestId, opts);
   }
 
   /** Chat Completions API. */
   async chat(messages: ChatMessage[], opts: GenerateOptions = {}): Promise<FuguResult> {
+    this.guardInput(messages.reduce((n, m) => n + m.content.length, 0));
     const model = opts.model ?? this.model;
     const body: Record<string, unknown> = { ...(opts.params ?? {}), model, messages };
     if (opts.reasoningEffort) body.reasoning = { effort: opts.reasoningEffort };
+    this.applyOutputCap(body, "max_completion_tokens", opts);
     const { json, requestId } = await this.request("/chat/completions", body, model, opts);
     return this.buildResult(json, model, extractChatText(json), requestId, opts);
+  }
+
+  /** Streaming Responses API. Yields text deltas then a terminal aggregated result. */
+  async *respondStream(input: string, opts: GenerateOptions = {}): AsyncGenerator<FuguStreamEvent> {
+    this.guardInput(input.length);
+    const model = opts.model ?? this.model;
+    const body: Record<string, unknown> = { ...(opts.params ?? {}), model, input, stream: true };
+    if (opts.instructions) body.instructions = opts.instructions;
+    if (opts.reasoningEffort) body.reasoning = { effort: opts.reasoningEffort };
+    this.applyOutputCap(body, "max_output_tokens", opts);
+    yield* this.stream("/responses", body, model, "responses", opts);
+  }
+
+  /** Streaming Chat Completions API. */
+  async *chatStream(messages: ChatMessage[], opts: GenerateOptions = {}): AsyncGenerator<FuguStreamEvent> {
+    this.guardInput(messages.reduce((n, m) => n + m.content.length, 0));
+    const model = opts.model ?? this.model;
+    const body: Record<string, unknown> = { ...(opts.params ?? {}), model, messages, stream: true };
+    if (opts.reasoningEffort) body.reasoning = { effort: opts.reasoningEffort };
+    this.applyOutputCap(body, "max_completion_tokens", opts);
+    yield* this.stream("/chat/completions", body, model, "chat", opts);
+  }
+
+  private requireApiKey(): void {
+    if (!this.apiKey) {
+      throw new FuguConfigError(
+        "Missing SAKANA_API_KEY. Get a key from https://console.sakana.ai/get-started and set it in your environment.",
+      );
+    }
+  }
+
+  private guardInput(chars: number): void {
+    if (this.maxInputChars > 0 && chars > this.maxInputChars) {
+      throw new FuguBadRequestError(`Input too large: ${chars} chars > maxInputChars ${this.maxInputChars}.`);
+    }
+  }
+
+  private applyOutputCap(body: Record<string, unknown>, field: string, opts: GenerateOptions): void {
+    const current = typeof body[field] === "number" ? (body[field] as number) : undefined;
+    const requested = opts.maxOutputTokens ?? current;
+    const cap = this.maxOutputTokens;
+    if (requested !== undefined) body[field] = cap !== undefined ? Math.min(requested, cap) : requested;
+    else if (cap !== undefined) body[field] = cap;
   }
 
   private buildResult(
@@ -127,6 +218,7 @@ export class FuguClient {
       costUsd: computeCost(model, usage, this.priceTable),
       requestId,
     };
+    this.budget?.record(result.costUsd);
     if (opts.throwOnIncomplete && meta.status === "incomplete") {
       throw new FuguIncompleteError(
         `Fugu response incomplete${meta.incompleteReason ? `: ${meta.incompleteReason}` : ""}`,
@@ -136,39 +228,30 @@ export class FuguClient {
     return result;
   }
 
-  private async request(
-    path: string,
-    body: unknown,
-    model: string,
-    opts: GenerateOptions,
-  ): Promise<RawResponse> {
-    if (!this.apiKey) {
-      throw new FuguConfigError(
-        "Missing SAKANA_API_KEY. Get a key from https://console.sakana.ai/get-started and set it in your environment.",
-      );
-    }
-    const url = `${this.baseUrl}${path}`;
-    const timeoutMs = opts.timeoutMs ?? this.timeoutOverrideMs ?? defaultTimeoutMs(model, opts.reasoningEffort);
-    const signal = opts.signal
-      ? AbortSignal.any([opts.signal, AbortSignal.timeout(timeoutMs)])
-      : AbortSignal.timeout(timeoutMs);
+  private headers(idempotencyKey?: string): Record<string, string> {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${this.apiKey}`,
+    };
+    if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
+    return headers;
+  }
 
-    let res: Response;
+  /** A single fetch with timeout/abort/network classification (no body consumed). */
+  private async doFetch(
+    url: string,
+    init: RequestInit,
+    path: string,
+    timeoutMs: number,
+    callerSignal: AbortSignal | undefined,
+  ): Promise<Response> {
+    const signal = callerSignal
+      ? AbortSignal.any([callerSignal, AbortSignal.timeout(timeoutMs)])
+      : AbortSignal.timeout(timeoutMs);
     try {
-      res = await this.fetchImpl(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${this.apiKey}`,
-        },
-        body: JSON.stringify(body),
-        signal,
-      });
+      return await this.fetchImpl(url, { ...init, signal });
     } catch (err) {
-      // Caller-initiated cancellation wins; then timeout; otherwise it's a connection error.
-      if (opts.signal?.aborted) {
-        throw new FuguAbortError("Request aborted by caller.", { cause: err });
-      }
+      if (callerSignal?.aborted) throw new FuguAbortError("Request aborted by caller.", { cause: err });
       const name = err instanceof Error ? err.name : "";
       if (name === "TimeoutError" || name === "AbortError") {
         throw new FuguTimeoutError(`Request to ${path} timed out after ${timeoutMs}ms.`, { cause: err });
@@ -176,12 +259,27 @@ export class FuguClient {
       const reason = err instanceof Error ? err.message : String(err);
       throw new FuguConnectionError(`Request to ${path} failed: ${reason}`, { cause: err });
     }
+  }
 
+  private async sendOnce(
+    path: string,
+    body: unknown,
+    model: string,
+    opts: GenerateOptions,
+    idempotencyKey: string,
+  ): Promise<RawResponse> {
+    const url = `${this.baseUrl}${path}`;
+    const timeoutMs = opts.timeoutMs ?? this.timeoutOverrideMs ?? defaultTimeoutMs(model, opts.reasoningEffort);
+    const res = await this.doFetch(
+      url,
+      { method: "POST", headers: this.headers(idempotencyKey), body: JSON.stringify(body) },
+      path,
+      timeoutMs,
+      opts.signal,
+    );
     const requestId = res.headers.get("x-request-id") ?? res.headers.get("x-requestid") ?? undefined;
     const rawText = await res.text();
-    if (!res.ok) {
-      throw errorFromResponse(res.status, rawText, res.headers);
-    }
+    if (!res.ok) throw errorFromResponse(res.status, rawText, res.headers);
     if (!rawText) return { json: {}, requestId };
     try {
       return { json: JSON.parse(rawText), requestId };
@@ -192,12 +290,89 @@ export class FuguClient {
       });
     }
   }
+
+  private async request(
+    path: string,
+    body: unknown,
+    model: string,
+    opts: GenerateOptions,
+  ): Promise<RawResponse> {
+    this.requireApiKey();
+    this.budget?.check();
+    const idempotencyKey = opts.idempotencyKey ?? randomUUID();
+    const maxRetries = opts.maxRetries ?? this.retry.maxRetries;
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return await this.sendOnce(path, body, model, opts, idempotencyKey);
+      } catch (err) {
+        if (!(err instanceof FuguError) || !err.isRetryable || attempt >= maxRetries) throw err;
+        await sleep(retryDelayMs(err, attempt, this.retry), opts.signal);
+      }
+    }
+  }
+
+  private async *stream(
+    path: string,
+    body: unknown,
+    model: string,
+    kind: "responses" | "chat",
+    opts: GenerateOptions,
+  ): AsyncGenerator<FuguStreamEvent> {
+    this.requireApiKey();
+    this.budget?.check();
+    const url = `${this.baseUrl}${path}`;
+    const timeoutMs = opts.timeoutMs ?? this.timeoutOverrideMs ?? defaultTimeoutMs(model, opts.reasoningEffort);
+    const res = await this.doFetch(
+      url,
+      { method: "POST", headers: this.headers(), body: JSON.stringify(body) },
+      path,
+      timeoutMs,
+      opts.signal,
+    );
+    const requestId = res.headers.get("x-request-id") ?? res.headers.get("x-requestid") ?? undefined;
+    if (!res.ok) {
+      const text = await res.text();
+      throw errorFromResponse(res.status, text, res.headers);
+    }
+    if (!res.body) throw new FuguParseError(`No response body to stream (${path}).`, { requestId });
+
+    let text = "";
+    let final: unknown;
+    for await (const msg of parseSSE(res.body)) {
+      if (msg.data === "[DONE]") break;
+      let json: unknown;
+      try {
+        json = JSON.parse(msg.data);
+      } catch {
+        continue;
+      }
+      const delta = extractStreamDelta(json);
+      if (delta) {
+        text += delta;
+        yield { type: "delta", textDelta: delta };
+      }
+      const maybeFinal = extractStreamFinal(json);
+      if (maybeFinal !== undefined) final = maybeFinal;
+    }
+
+    const raw =
+      final ??
+      (kind === "responses"
+        ? { output_text: text, status: "completed" }
+        : { choices: [{ message: { content: text }, finish_reason: "stop" }] });
+    const baseText = kind === "responses" ? extractResponsesText(raw) : extractChatText(raw);
+    const result = this.buildResult(raw, model, baseText || text, requestId, {
+      ...opts,
+      throwOnIncomplete: false,
+    });
+    yield { type: "done", result };
+  }
 }
 
 /** Build a client straight from a loaded config. */
 export function createClient(
   config: FuguConfig,
-  extra: { fetch?: typeof fetch; timeoutMs?: number; priceTable?: PriceTable } = {},
+  extra: Omit<FuguClientOptions, keyof FuguConfig> = {},
 ): FuguClient {
   return new FuguClient({ ...config, ...extra });
 }
