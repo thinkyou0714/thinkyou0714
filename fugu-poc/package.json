@@ -1,0 +1,28 @@
+{
+  "name": "fugu-poc",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Minimal PoC client for the Sakana Fugu OpenAI-compatible API (Responses + Chat Completions). Zero runtime dependencies.",
+  "engines": {
+    "node": ">=22.9.0"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env --experimental-strip-types src/cli.ts",
+    "fugu": "node --env-file-if-exists=.env --experimental-strip-types src/cli.ts",
+    "test": "node --experimental-strip-types --test test/fugu-client.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "sakana",
+    "fugu",
+    "openai-compatible",
+    "llm",
+    "poc"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}
