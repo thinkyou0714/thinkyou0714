@@ -1,7 +1,7 @@
 import { defineConfig } from "tsdown";
 
 export default defineConfig({
-  entry: ["src/index.ts", "src/cli.ts", "src/openai.ts"],
+  entry: ["src/index.ts", "src/cli.ts", "src/openai.ts", "src/proxy-cli.ts"],
   format: "esm",
   platform: "node",
   target: "node22",

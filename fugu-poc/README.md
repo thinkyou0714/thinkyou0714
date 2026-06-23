@@ -30,6 +30,9 @@ to answer directly or to delegate to and synthesize a team of expert frontier mo
   **structured output** (`respondJson` with validate-and-repair), stateful
   **`Conversation`** chaining, and **observability hooks** (`onRequest` / `onResponse` /
   `logger` — wire pino/OpenTelemetry; the core stays dependency-free).
+- **Ecosystem:** a multi-provider **`FuguRouter`** (failover) and an OpenAI-compatible
+  **proxy** (`createProxyServer` / `fugu-proxy` bin) so Cursor / n8n / any OpenAI-SDK
+  tool can target Fugu — with failover — at a `localhost` endpoint.
 
 ## Install
 
@@ -104,6 +107,23 @@ const { data } = await client.respondJson<{ score: number }>("Rate this 1-10", {
 });
 ```
 
+### Router + proxy (use Fugu from any OpenAI-SDK tool, with failover)
+
+```ts
+import { FuguClient, FuguRouter, createProxyServer, loadConfig } from "fugu-poc";
+
+const router = new FuguRouter({
+  providers: [
+    { name: "fugu", client: new FuguClient(loadConfig()), model: "fugu-ultra" },
+    { name: "backup", client: new FuguClient({ ...loadConfig(), baseUrl: "https://backup/v1" }) },
+  ],
+});
+
+// one localhost OpenAI endpoint any tool (Cursor, n8n, scripts) can target:
+createProxyServer({ backend: router, token: "local-secret" }).listen(4141);
+// or just run the bin:  npx fugu-proxy   ->   http://localhost:4141/v1
+```
+
 ### Optional OpenAI-SDK adapter
 
 ```ts
@@ -145,9 +165,11 @@ fugu-poc/
 │   ├── json.ts         # loose JSON extraction (structured output)
 │   ├── observe.ts      # logging / metrics hooks
 │   ├── conversation.ts # stateful Responses chaining
+│   ├── router.ts       # multi-provider failover (FuguRouter)
+│   ├── proxy.ts        # OpenAI-compatible proxy (bin: fugu-proxy)
 │   ├── cli.ts          # CLI (bin: fugu)
 │   └── openai.ts       # optional ./openai adapter
-├── test/               # fugu-client / timeout / p2 / p3 tests
+├── test/               # fugu-client / timeout / p2 / p3 / p4 tests
 ├── .github/workflows/  # ci / release (changesets + npm OIDC) / codeql (templates)
 └── tsdown.config.ts · biome.json · .changeset · tsconfig.json
 ```

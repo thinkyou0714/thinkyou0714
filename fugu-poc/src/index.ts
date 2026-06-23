@@ -25,6 +25,11 @@ export { Conversation } from "./conversation.ts";
 export { noopLogger } from "./observe.ts";
 export type { Logger, RequestEvent, ResponseEvent } from "./observe.ts";
 
+export { FuguRouter } from "./router.ts";
+export type { RouterProvider, RoutedResult, FuguRouterOptions } from "./router.ts";
+export { createProxyServer } from "./proxy.ts";
+export type { ProxyOptions, ProxyBackend } from "./proxy.ts";
+
 export * from "./errors.ts";
 
 export { BudgetGuard } from "./budget.ts";
