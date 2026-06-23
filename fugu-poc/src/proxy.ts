@@ -32,7 +32,7 @@ export interface ProxyOptions {
 
 export function createProxyServer(options: ProxyOptions): http.Server {
   const models = options.models ?? ["fugu", "fugu-ultra"];
-  return http.createServer((req, res) => {
+  const server = http.createServer((req, res) => {
     handle(req, res, options, models).catch((err) => {
       if (!res.headersSent) {
         sendJson(res, 500, { error: { message: errMessage(err), type: "proxy_error" } });
@@ -41,6 +41,10 @@ export function createProxyServer(options: ProxyOptions): http.Server {
       }
     });
   });
+  server.on("clientError", (_err, socket) => {
+    if (socket.writable) socket.end("HTTP/1.1 400 Bad Request\r\n\r\n");
+  });
+  return server;
 }
 
 async function handle(
@@ -49,25 +53,27 @@ async function handle(
   options: ProxyOptions,
   models: string[],
 ): Promise<void> {
-  const path = (req.url ?? "/").split("?")[0].replace(/\/+$/, "");
+  const rawPath = (req.url ?? "/").split("?")[0].replace(/\/+$/, "");
+  // Exact routes (with or without a /v1 prefix) — NOT endsWith, so /foo/chat/completions 404s.
+  const route = rawPath.replace(/^\/v1(?=\/|$)/, "") || "/";
 
   if (options.token && req.headers.authorization !== `Bearer ${options.token}`) {
     return sendJson(res, 401, { error: { message: "Unauthorized", type: "auth" } });
   }
 
-  if (req.method === "GET" && path.endsWith("/models")) {
+  if (req.method === "GET" && route === "/models") {
     return sendJson(res, 200, {
       object: "list",
       data: models.map((id) => ({ id, object: "model", owned_by: "sakana" })),
     });
   }
-  if (req.method === "POST" && path.endsWith("/chat/completions")) {
+  if (req.method === "POST" && route === "/chat/completions") {
     return handleChat(res, options.backend, await readJson(req));
   }
-  if (req.method === "POST" && path.endsWith("/responses")) {
+  if (req.method === "POST" && route === "/responses") {
     return handleResponses(res, options.backend, await readJson(req));
   }
-  return sendJson(res, 404, { error: { message: `Not found: ${req.method} ${path}`, type: "not_found" } });
+  return sendJson(res, 404, { error: { message: `Not found: ${req.method} ${rawPath}`, type: "not_found" } });
 }
 
 async function handleChat(
@@ -93,11 +99,13 @@ async function handleChat(
           );
         }
       }
+      res.write("data: [DONE]\n\n"); // success terminator only
     } catch (err) {
-      writeSSE(res, { error: { message: errMessage(err) } });
+      // Surface a real error frame and do NOT send [DONE] (which would look like a clean end).
+      writeSSE(res, { error: { message: errMessage(err), type: "proxy_error" } });
+    } finally {
+      res.end();
     }
-    res.write("data: [DONE]\n\n");
-    res.end();
     return;
   }
 
@@ -137,11 +145,12 @@ async function handleResponses(
             response: ev.result?.raw ?? { output_text: ev.result?.text },
           });
       }
+      res.write("data: [DONE]\n\n");
     } catch (err) {
-      writeSSE(res, { error: { message: errMessage(err) } });
+      writeSSE(res, { error: { message: errMessage(err), type: "proxy_error" } });
+    } finally {
+      res.end();
     }
-    res.write("data: [DONE]\n\n");
-    res.end();
     return;
   }
 
@@ -179,20 +188,37 @@ function toOpenAIUsage(usage: FuguUsage): Record<string, unknown> {
   };
 }
 
+const MAX_BODY_BYTES = 10 * 1024 * 1024;
+
 function readJson(req: http.IncomingMessage): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     let data = "";
-    req.on("data", (c) => {
-      data += c;
+    let size = 0;
+    let settled = false;
+    const fail = (err: Error) => {
+      if (settled) return;
+      settled = true;
+      reject(err);
+      req.destroy();
+    };
+    req.on("data", (piece) => {
+      size += piece.length;
+      if (size > MAX_BODY_BYTES) {
+        fail(new Error("Request body too large."));
+        return;
+      }
+      data += piece;
     });
     req.on("end", () => {
+      if (settled) return;
+      settled = true;
       try {
         resolve(data ? (JSON.parse(data) as Record<string, unknown>) : {});
       } catch (err) {
         reject(err instanceof Error ? err : new Error(String(err)));
       }
     });
-    req.on("error", reject);
+    req.on("error", (err) => fail(err instanceof Error ? err : new Error(String(err))));
   });
 }
 

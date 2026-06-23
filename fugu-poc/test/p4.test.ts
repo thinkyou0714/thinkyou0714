@@ -6,8 +6,9 @@ import { FuguClient } from "../src/fugu-client.ts";
 import { FuguRouter } from "../src/router.ts";
 import type { RouterProvider } from "../src/router.ts";
 import { createProxyServer } from "../src/proxy.ts";
-import type { ProxyOptions } from "../src/proxy.ts";
-import { FuguBadRequestError } from "../src/errors.ts";
+import type { ProxyOptions, ProxyBackend } from "../src/proxy.ts";
+import type { FuguStreamEvent } from "../src/fugu-client.ts";
+import { FuguBadRequestError, FuguError } from "../src/errors.ts";
 import { DEFAULT_BASE_URL } from "../src/config.ts";
 
 function throwingFetch(err: unknown): typeof fetch {
@@ -179,4 +180,104 @@ test("proxy streams chat completions as SSE chunks ending with [DONE]", async ()
   assert.match(text, /"content":"Hi"/);
   assert.match(text, /data: \[DONE\]/);
   await close();
+});
+
+// ---------------------------------------------------------------- proxy review fixes
+
+test("proxy 404s non-exact paths (no endsWith bypass) and never reaches the backend", async () => {
+  let called = false;
+  const backend = backendWith((async () => {
+    called = true;
+    return new Response("{}");
+  }) as unknown as typeof fetch);
+  const { base, close } = await startProxy({ backend });
+  const origin = new URL(base).origin;
+  const r = await fetch(`${origin}/foo/chat/completions`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: "{}",
+  });
+  assert.equal(r.status, 404);
+  assert.equal(called, false);
+  await close();
+});
+
+test("proxy POST /v1/responses returns the raw responses payload", async () => {
+  const { base, close } = await startProxy({
+    backend: backendWith(jsonFetch({ output_text: "resp", status: "completed" })),
+  });
+  const r = await fetch(`${base}/responses`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ model: "fugu", input: "hi" }),
+  });
+  const j = (await r.json()) as { output_text: string };
+  assert.equal(j.output_text, "resp");
+  await close();
+});
+
+test("proxy stream emits an error frame and no [DONE] when the backend stream fails", async () => {
+  const backend: ProxyBackend = {
+    chat: async () => {
+      throw new Error("nope");
+    },
+    respond: async () => {
+      throw new Error("nope");
+    },
+    async *chatStream(): AsyncGenerator<FuguStreamEvent> {
+      yield { type: "delta", textDelta: "partial" };
+      throw new Error("mid-stream boom");
+    },
+    async *respondStream(): AsyncGenerator<FuguStreamEvent> {
+      throw new Error("nope");
+    },
+  };
+  const { base, close } = await startProxy({ backend });
+  const r = await fetch(`${base}/chat/completions`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ messages: [{ role: "user", content: "hi" }], stream: true }),
+  });
+  const text = await r.text();
+  assert.match(text, /"content":"partial"/);
+  assert.match(text, /mid-stream boom/);
+  assert.doesNotMatch(text, /\[DONE\]/);
+  await close();
+});
+
+test("proxy returns 500 (not a hang) on an invalid JSON body", async () => {
+  const { base, close } = await startProxy({ backend: backendWith(jsonFetch({})) });
+  const r = await fetch(`${base}/chat/completions`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: "{not valid json",
+  });
+  assert.equal(r.status, 500);
+  await close();
+});
+
+test("proxy token blocks /chat/completions before the backend", async () => {
+  let called = false;
+  const backend = backendWith((async () => {
+    called = true;
+    return new Response("{}");
+  }) as unknown as typeof fetch);
+  const { base, close } = await startProxy({ backend, token: "secret" });
+  const r = await fetch(`${base}/chat/completions`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ messages: [] }),
+  });
+  assert.equal(r.status, 401);
+  assert.equal(called, false);
+  await close();
+});
+
+test("FuguRouter propagates the last provider's error after exhausting failover", async () => {
+  const mk = (name: string) => provider(name, jsonFetch({ error: { message: name } }, 503));
+  const router = new FuguRouter({ providers: [mk("p1"), mk("p2"), mk("p3")] });
+  await assert.rejects(
+    () => router.respond("hi"),
+    (e: unknown) => e instanceof FuguError && e.status === 503,
+  );
 });

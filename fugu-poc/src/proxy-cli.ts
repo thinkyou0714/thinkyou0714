@@ -15,7 +15,8 @@ import { FuguClient } from "./fugu-client.ts";
 import { createProxyServer } from "./proxy.ts";
 
 export function startProxyFromEnv(env: NodeJS.ProcessEnv = process.env): import("node:http").Server {
-  const port = Number(env.FUGU_PROXY_PORT ?? 4141);
+  const parsedPort = Number.parseInt(env.FUGU_PROXY_PORT ?? "", 10);
+  const port = Number.isInteger(parsedPort) && parsedPort >= 0 && parsedPort <= 65535 ? parsedPort : 4141;
   const token = env.FUGU_PROXY_TOKEN || undefined;
   const client = new FuguClient(loadConfig({ env }));
   const server = createProxyServer({ backend: client, token });
