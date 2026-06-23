@@ -30,7 +30,13 @@ import { parseUsage, parseResponseMeta, extractResponsesText, extractChatText } 
 import type { FuguResult } from "./types.ts";
 import { DEFAULT_RETRY, retryDelayMs, sleep } from "./retry.ts";
 import type { RetryConfig } from "./retry.ts";
-import { parseSSE, extractStreamDelta, extractStreamFinal } from "./stream.ts";
+import {
+  parseSSE,
+  extractStreamDelta,
+  extractStreamFinal,
+  extractStreamUsage,
+  extractStreamFinishReason,
+} from "./stream.ts";
 import type { BudgetGuard } from "./budget.ts";
 
 export type { FuguResult, FuguUsage, ResponseStatus } from "./types.ts";
@@ -171,6 +177,8 @@ export class FuguClient {
     const model = opts.model ?? this.model;
     const body: Record<string, unknown> = { ...(opts.params ?? {}), model, messages, stream: true };
     if (opts.reasoningEffort) body.reasoning = { effort: opts.reasoningEffort };
+    // Ask the API to emit a final usage chunk so cost / BudgetGuard work for chat streams.
+    body.stream_options ??= { include_usage: true };
     this.applyOutputCap(body, "max_completion_tokens", opts);
     yield* this.stream("/chat/completions", body, model, "chat", opts);
   }
@@ -237,6 +245,23 @@ export class FuguClient {
     return headers;
   }
 
+  /** Map a thrown fetch/stream error to a typed FuguError (timeout/abort/network). */
+  private classifyError(
+    err: unknown,
+    callerSignal: AbortSignal | undefined,
+    path: string,
+    timeoutMs: number,
+  ): FuguError {
+    if (err instanceof FuguError) return err;
+    if (callerSignal?.aborted) return new FuguAbortError("Request aborted by caller.", { cause: err });
+    const name = err instanceof Error ? err.name : "";
+    if (name === "TimeoutError" || name === "AbortError") {
+      return new FuguTimeoutError(`Request to ${path} timed out after ${timeoutMs}ms.`, { cause: err });
+    }
+    const reason = err instanceof Error ? err.message : String(err);
+    return new FuguConnectionError(`Request to ${path} failed: ${reason}`, { cause: err });
+  }
+
   /** A single fetch with timeout/abort/network classification (no body consumed). */
   private async doFetch(
     url: string,
@@ -251,13 +276,7 @@ export class FuguClient {
     try {
       return await this.fetchImpl(url, { ...init, signal });
     } catch (err) {
-      if (callerSignal?.aborted) throw new FuguAbortError("Request aborted by caller.", { cause: err });
-      const name = err instanceof Error ? err.name : "";
-      if (name === "TimeoutError" || name === "AbortError") {
-        throw new FuguTimeoutError(`Request to ${path} timed out after ${timeoutMs}ms.`, { cause: err });
-      }
-      const reason = err instanceof Error ? err.message : String(err);
-      throw new FuguConnectionError(`Request to ${path} failed: ${reason}`, { cause: err });
+      throw this.classifyError(err, callerSignal, path, timeoutMs);
     }
   }
 
@@ -278,7 +297,12 @@ export class FuguClient {
       opts.signal,
     );
     const requestId = res.headers.get("x-request-id") ?? res.headers.get("x-requestid") ?? undefined;
-    const rawText = await res.text();
+    let rawText: string;
+    try {
+      rawText = await res.text();
+    } catch (err) {
+      throw this.classifyError(err, opts.signal, path, timeoutMs);
+    }
     if (!res.ok) throw errorFromResponse(res.status, rawText, res.headers);
     if (!rawText) return { json: {}, requestId };
     try {
@@ -331,35 +355,52 @@ export class FuguClient {
     );
     const requestId = res.headers.get("x-request-id") ?? res.headers.get("x-requestid") ?? undefined;
     if (!res.ok) {
-      const text = await res.text();
+      const text = await res.text().catch(() => "");
       throw errorFromResponse(res.status, text, res.headers);
     }
     if (!res.body) throw new FuguParseError(`No response body to stream (${path}).`, { requestId });
 
     let text = "";
-    let final: unknown;
-    for await (const msg of parseSSE(res.body)) {
-      if (msg.data === "[DONE]") break;
-      let json: unknown;
-      try {
-        json = JSON.parse(msg.data);
-      } catch {
-        continue;
+    let finalResponse: unknown;
+    let usage: unknown;
+    let finishReason: string | undefined;
+    try {
+      for await (const msg of parseSSE(res.body)) {
+        if (msg.data === "[DONE]") break;
+        let json: unknown;
+        try {
+          json = JSON.parse(msg.data);
+        } catch {
+          continue;
+        }
+        const delta = extractStreamDelta(json);
+        if (delta) {
+          text += delta;
+          yield { type: "delta", textDelta: delta };
+        }
+        const f = extractStreamFinal(json);
+        if (f !== undefined) finalResponse = f;
+        const u = extractStreamUsage(json);
+        if (u !== undefined) usage = u;
+        const fr = extractStreamFinishReason(json);
+        if (fr !== undefined) finishReason = fr;
       }
-      const delta = extractStreamDelta(json);
-      if (delta) {
-        text += delta;
-        yield { type: "delta", textDelta: delta };
-      }
-      const maybeFinal = extractStreamFinal(json);
-      if (maybeFinal !== undefined) final = maybeFinal;
+    } catch (err) {
+      throw this.classifyError(err, opts.signal, path, timeoutMs);
     }
 
-    const raw =
-      final ??
-      (kind === "responses"
-        ? { output_text: text, status: "completed" }
-        : { choices: [{ message: { content: text }, finish_reason: "stop" }] });
+    // Prefer the API's terminal payload; otherwise synthesize from accumulated text +
+    // any captured usage WITHOUT claiming "completed" (a truncated stream must not look done).
+    let raw: unknown;
+    if (finalResponse !== undefined) {
+      raw = finalResponse;
+    } else if (kind === "responses") {
+      raw = usage !== undefined ? { output_text: text, usage } : { output_text: text };
+    } else {
+      const choice: Record<string, unknown> = { message: { content: text } };
+      if (finishReason !== undefined) choice.finish_reason = finishReason;
+      raw = usage !== undefined ? { choices: [choice], usage } : { choices: [choice] };
+    }
     const baseText = kind === "responses" ? extractResponsesText(raw) : extractChatText(raw);
     const result = this.buildResult(raw, model, baseText || text, requestId, {
       ...opts,

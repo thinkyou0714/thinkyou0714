@@ -26,7 +26,13 @@ export type { BudgetOptions } from "./budget.ts";
 export { chooseModel } from "./routing.ts";
 export type { FuguModel, RouteTask, RouteInput, RoutingPolicy } from "./routing.ts";
 
-export { parseSSE, extractStreamDelta, extractStreamFinal } from "./stream.ts";
+export {
+  parseSSE,
+  extractStreamDelta,
+  extractStreamFinal,
+  extractStreamUsage,
+  extractStreamFinishReason,
+} from "./stream.ts";
 export type { SSEMessage } from "./stream.ts";
 
 export { DEFAULT_RETRY, retryDelayMs, fullJitterBackoff, sleep } from "./retry.ts";

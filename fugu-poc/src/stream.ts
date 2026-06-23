@@ -72,3 +72,19 @@ export function extractStreamFinal(json: unknown): unknown {
   if (getProp(json, "type") === "response.completed") return getProp(json, "response");
   return undefined;
 }
+
+/** Extract a top-level `usage` object (Chat streams emit it in the final chunk). */
+export function extractStreamUsage(json: unknown): unknown {
+  const usage = getProp(json, "usage");
+  return usage && typeof usage === "object" ? usage : undefined;
+}
+
+/** Extract `choices[0].finish_reason` from a Chat stream chunk, if present. */
+export function extractStreamFinishReason(json: unknown): string | undefined {
+  const choices = getProp(json, "choices");
+  if (Array.isArray(choices) && choices[0]) {
+    const fr = getProp(choices[0], "finish_reason");
+    if (typeof fr === "string") return fr;
+  }
+  return undefined;
+}

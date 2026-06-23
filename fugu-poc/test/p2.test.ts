@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { FuguClient } from "../src/fugu-client.ts";
-import { FuguRateLimitError, FuguBadRequestError, FuguBudgetError } from "../src/errors.ts";
+import { FuguRateLimitError, FuguBadRequestError, FuguBudgetError, FuguTimeoutError } from "../src/errors.ts";
 import { BudgetGuard } from "../src/budget.ts";
 import { chooseModel } from "../src/routing.ts";
 import { parseSSE } from "../src/stream.ts";
@@ -279,4 +279,97 @@ test("output-token cap clamps the request body (responses + chat)", async () => 
 
   await client.chat([{ role: "user", content: "hi" }], { maxOutputTokens: 50 });
   assert.equal(JSON.parse(calls[2].body).max_completion_tokens, 50);
+});
+
+// ---------------------------------------------------------------- streaming usage / budget / errors
+
+test("chatStream captures usage from the final include_usage chunk", async () => {
+  const { fn, calls } = fixedFetch(() =>
+    sseResponse([
+      'data: {"choices":[{"delta":{"content":"hi"}}]}\n\n',
+      'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
+      'data: {"choices":[],"usage":{"prompt_tokens":10,"completion_tokens":20}}\n\n',
+      "data: [DONE]\n\n",
+    ]),
+  );
+  const client = new FuguClient({ apiKey: "k", baseUrl: DEFAULT_BASE_URL, model: "fugu-ultra", fetch: fn });
+  const done = (await collect(client.chatStream([{ role: "user", content: "hi" }]))).at(-1);
+  assert.equal(done?.result?.text, "hi");
+  assert.equal(done?.result?.usage.inputTokens, 10);
+  assert.equal(done?.result?.usage.outputTokens, 20);
+  assert.ok((done?.result?.costUsd ?? 0) > 0);
+  assert.equal(done?.result?.status, "completed");
+  assert.deepEqual(JSON.parse(calls[0].body).stream_options, { include_usage: true });
+});
+
+test("streaming records spend against the BudgetGuard", async () => {
+  const budget = new BudgetGuard({ limitUsd: 1000 });
+  const { fn } = fixedFetch(() =>
+    sseResponse([
+      'data: {"choices":[{"delta":{"content":"hi"}}]}\n\n',
+      'data: {"choices":[],"usage":{"prompt_tokens":1000000,"completion_tokens":0}}\n\n',
+      "data: [DONE]\n\n",
+    ]),
+  );
+  const client = new FuguClient({
+    apiKey: "k",
+    baseUrl: DEFAULT_BASE_URL,
+    model: "fugu-ultra",
+    fetch: fn,
+    budget,
+  });
+  await collect(client.chatStream([{ role: "user", content: "hi" }]));
+  assert.ok(budget.spent > 4); // fugu-ultra 1M input ≈ $5
+});
+
+test("a stalled stream body aborts as a typed FuguTimeoutError", async () => {
+  const fn = ((_url: string | URL | Request, init?: RequestInit) => {
+    const signal = init?.signal;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const keepAlive = setTimeout(() => {}, 60_000);
+        signal?.addEventListener(
+          "abort",
+          () => {
+            clearTimeout(keepAlive);
+            const reasonName = (signal.reason as { name?: string } | undefined)?.name;
+            controller.error(
+              Object.assign(new Error("aborted"), {
+                name: reasonName === "TimeoutError" ? "TimeoutError" : "AbortError",
+              }),
+            );
+          },
+          { once: true },
+        );
+      },
+    });
+    return Promise.resolve(
+      new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } }),
+    );
+  }) as unknown as typeof fetch;
+  const client = new FuguClient({
+    apiKey: "k",
+    baseUrl: DEFAULT_BASE_URL,
+    model: "fugu",
+    fetch: fn,
+    timeoutMs: 5,
+  });
+  await assert.rejects(
+    async () => {
+      for await (const _ev of client.respondStream("hi")) {
+        // drain until the body aborts
+      }
+    },
+    (e: unknown) => e instanceof FuguTimeoutError,
+  );
+});
+
+test("a stream that ends without a terminal event is not falsely 'completed'", async () => {
+  const { fn } = fixedFetch(() =>
+    sseResponse(['data: {"type":"response.output_text.delta","delta":"partial"}\n\n']),
+  );
+  const client = new FuguClient({ apiKey: "k", baseUrl: DEFAULT_BASE_URL, model: "fugu", fetch: fn });
+  const done = (await collect(client.respondStream("hi"))).at(-1);
+  assert.equal(done?.result?.text, "partial");
+  assert.notEqual(done?.result?.status, "completed");
 });
