@@ -7,6 +7,6 @@ export default defineConfig({
   target: "node22",
   dts: true,
   clean: true,
-  // `openai` is an optional peer dep used only by the ./openai adapter.
-  external: ["openai"],
+  // `openai` (the ./openai adapter's optional peer) is loaded via a non-literal
+  // dynamic import, so it is never bundled — nothing to externalize explicitly.
 });

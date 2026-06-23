@@ -21,9 +21,9 @@ const DENY_KEYS = new Set([
 export function redactString(input: string): string {
   return (
     input
-      .replace(/\bBearer\s+[A-Za-z0-9._\-]+/gi, "Bearer [REDACTED]")
+      .replace(/\bBearer\s+[A-Za-z0-9._-]+/gi, "Bearer [REDACTED]")
       // OpenAI-style keys with a hyphen or underscore prefix (e.g. "sk" + "-"/"_" + token).
-      .replace(/\bsk[-_][A-Za-z0-9._\-]{6,}/gi, "[REDACTED]")
+      .replace(/\bsk[-_][A-Za-z0-9._-]{6,}/gi, "[REDACTED]")
       // Labelled secrets in free text: api_key=…, token: …, password=…, etc.
       // (The Authorization header is covered by the Bearer rule above + the object deny-list.)
       .replace(

@@ -23,12 +23,7 @@ import {
 } from "./errors.ts";
 import { computeCost, DEFAULT_PRICES } from "./pricing.ts";
 import type { PriceTable } from "./pricing.ts";
-import {
-  parseUsage,
-  parseResponseMeta,
-  extractResponsesText,
-  extractChatText,
-} from "./types.ts";
+import { parseUsage, parseResponseMeta, extractResponsesText, extractChatText } from "./types.ts";
 import type { FuguResult } from "./types.ts";
 
 export type { FuguResult, FuguUsage, ResponseStatus } from "./types.ts";
@@ -191,7 +186,10 @@ export class FuguClient {
     try {
       return { json: JSON.parse(rawText), requestId };
     } catch {
-      throw new FuguParseError(`Failed to parse Fugu response as JSON (${path}).`, { status: res.status, requestId });
+      throw new FuguParseError(`Failed to parse Fugu response as JSON (${path}).`, {
+        status: res.status,
+        requestId,
+      });
     }
   }
 }

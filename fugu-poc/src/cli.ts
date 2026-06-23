@@ -142,7 +142,9 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     return 0;
   } catch (err) {
     if (err instanceof FuguError) {
-      process.stderr.write(`Fugu request failed [${err.code}${err.status ? ` ${err.status}` : ""}]: ${err.message}\n`);
+      process.stderr.write(
+        `Fugu request failed [${err.code}${err.status ? ` ${err.status}` : ""}]: ${err.message}\n`,
+      );
       if (err.requestId) process.stderr.write(`request-id: ${err.requestId}\n`);
       if (err.apiError?.code && err.apiError.code !== err.code) {
         process.stderr.write(`api code: ${err.apiError.code}\n`);

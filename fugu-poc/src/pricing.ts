@@ -22,7 +22,13 @@ export type PriceTable = Record<string, ModelPrice>;
 /** Best-known public rates (per 1M tokens), 2026-06. NOT verified against a live bill. */
 export const DEFAULT_PRICES: PriceTable = {
   fugu: { inputPerMTok: 1.25, outputPerMTok: 10, currency: "USD", asOf: "2026-06" },
-  "fugu-ultra": { inputPerMTok: 5, outputPerMTok: 30, cachedInputPerMTok: 0.5, currency: "USD", asOf: "2026-06" },
+  "fugu-ultra": {
+    inputPerMTok: 5,
+    outputPerMTok: 30,
+    cachedInputPerMTok: 0.5,
+    currency: "USD",
+    asOf: "2026-06",
+  },
 };
 
 /** Strip a dated snapshot suffix, e.g. `fugu-ultra-20260615` -> `fugu-ultra`. */

@@ -21,7 +21,13 @@ import { redact, redactString } from "../src/redact.ts";
 import { computeCost, baseModelId } from "../src/pricing.ts";
 import { parseUsage, parseResponseMeta, extractResponsesText, extractChatText } from "../src/types.ts";
 import type { FuguUsage } from "../src/types.ts";
-import { loadConfig, normalizeBaseUrl, defaultTimeoutMs, DEFAULT_BASE_URL, DEFAULT_MODEL } from "../src/config.ts";
+import {
+  loadConfig,
+  normalizeBaseUrl,
+  defaultTimeoutMs,
+  DEFAULT_BASE_URL,
+  DEFAULT_MODEL,
+} from "../src/config.ts";
 import { parseArgs, renderResult } from "../src/cli.ts";
 import type { FuguResult } from "../src/fugu-client.ts";
 
@@ -51,7 +57,10 @@ function throwingFetch(err: unknown): typeof fetch {
   }) as unknown as typeof fetch;
 }
 
-function jsonResponse(obj: unknown, init: { status?: number; headers?: Record<string, string> } = {}): Response {
+function jsonResponse(
+  obj: unknown,
+  init: { status?: number; headers?: Record<string, string> } = {},
+): Response {
   return new Response(JSON.stringify(obj), {
     status: init.status ?? 200,
     headers: { "content-type": "application/json", ...(init.headers ?? {}) },
@@ -114,7 +123,15 @@ test("respond() aggregates nested output[].content[].text when output_text is ab
   const { fn } = mockFetch(() =>
     jsonResponse({
       status: "completed",
-      output: [{ type: "message", content: [{ type: "output_text", text: "foo " }, { type: "output_text", text: "bar" }] }],
+      output: [
+        {
+          type: "message",
+          content: [
+            { type: "output_text", text: "foo " },
+            { type: "output_text", text: "bar" },
+          ],
+        },
+      ],
     }),
   );
   assert.equal((await client(fn).respond("x")).text, "foo bar");
@@ -122,7 +139,9 @@ test("respond() aggregates nested output[].content[].text when output_text is ab
 
 test("chat() posts to /chat/completions, parses content + finishReason", async () => {
   const { fn, calls } = mockFetch(() =>
-    jsonResponse({ choices: [{ message: { role: "assistant", content: "chat reply" }, finish_reason: "stop" }] }),
+    jsonResponse({
+      choices: [{ message: { role: "assistant", content: "chat reply" }, finish_reason: "stop" }],
+    }),
   );
   const res = await client(fn).chat([{ role: "user", content: "hi" }]);
   assert.equal(res.text, "chat reply");
@@ -141,7 +160,10 @@ test("respond() forwards reasoning.effort and instructions into the body", async
 
 test("params cannot override model/input", async () => {
   const { fn, calls } = mockFetch(() => jsonResponse({ output_text: "ok" }));
-  await client(fn).respond("real", { model: "fugu-ultra", params: { model: "HIJACK", input: "HIJACK", temperature: 0.2 } });
+  await client(fn).respond("real", {
+    model: "fugu-ultra",
+    params: { model: "HIJACK", input: "HIJACK", temperature: 0.2 },
+  });
   const body = JSON.parse(calls[0].init.body);
   assert.equal(body.model, "fugu-ultra");
   assert.equal(body.input, "real");
@@ -157,7 +179,10 @@ test("missing API key throws FuguConfigError before calling fetch", async () => 
     return jsonResponse({});
   }) as unknown as typeof fetch;
   const c = new FuguClient({ apiKey: "", baseUrl: DEFAULT_BASE_URL, model: "fugu", fetch: fn });
-  await assert.rejects(() => c.respond("x"), (e: unknown) => e instanceof FuguConfigError && e.code === "config");
+  await assert.rejects(
+    () => c.respond("x"),
+    (e: unknown) => e instanceof FuguConfigError && e.code === "config",
+  );
   assert.equal(called, false);
 });
 
@@ -166,12 +191,18 @@ test("401 -> FuguAuthError (not retryable), apiError parsed, no raw body kept", 
   await assert.rejects(
     () => client(fn).respond("x"),
     (e: unknown) =>
-      e instanceof FuguAuthError && e.status === 401 && e.code === "auth" && e.isRetryable === false && e.apiError?.message === "nope",
+      e instanceof FuguAuthError &&
+      e.status === 401 &&
+      e.code === "auth" &&
+      e.isRetryable === false &&
+      e.apiError?.message === "nope",
   );
 });
 
 test("429 -> FuguRateLimitError carries retryAfterMs and is retryable", async () => {
-  const { fn } = mockFetch(() => jsonResponse({ error: { message: "slow down" } }, { status: 429, headers: { "retry-after": "2" } }));
+  const { fn } = mockFetch(() =>
+    jsonResponse({ error: { message: "slow down" } }, { status: 429, headers: { "retry-after": "2" } }),
+  );
   await assert.rejects(
     () => client(fn).respond("x"),
     (e: unknown) => e instanceof FuguRateLimitError && e.retryAfterMs === 2000 && e.isRetryable === true,
@@ -180,11 +211,16 @@ test("429 -> FuguRateLimitError carries retryAfterMs and is retryable", async ()
 
 test("500 -> FuguAPIError is retryable", async () => {
   const { fn } = mockFetch(() => jsonResponse({ error: { message: "boom" } }, { status: 500 }));
-  await assert.rejects(() => client(fn).respond("x"), (e: unknown) => e instanceof FuguAPIError && e.isRetryable === true);
+  await assert.rejects(
+    () => client(fn).respond("x"),
+    (e: unknown) => e instanceof FuguAPIError && e.isRetryable === true,
+  );
 });
 
 test("400 with a secret in the message is redacted in apiError", async () => {
-  const { fn } = mockFetch(() => jsonResponse({ error: { message: `invalid key ${SK} provided` } }, { status: 400 }));
+  const { fn } = mockFetch(() =>
+    jsonResponse({ error: { message: `invalid key ${SK} provided` } }, { status: 400 }),
+  );
   await assert.rejects(
     () => client(fn).respond("x"),
     (e: unknown) =>
@@ -196,13 +232,21 @@ test("400 with a secret in the message is redacted in apiError", async () => {
 });
 
 test("invalid JSON on a 200 -> FuguParseError", async () => {
-  const { fn } = mockFetch(() => new Response("not json{", { status: 200, headers: { "content-type": "text/html" } }));
-  await assert.rejects(() => client(fn).respond("x"), (e: unknown) => e instanceof FuguParseError && e.code === "parse");
+  const { fn } = mockFetch(
+    () => new Response("not json{", { status: 200, headers: { "content-type": "text/html" } }),
+  );
+  await assert.rejects(
+    () => client(fn).respond("x"),
+    (e: unknown) => e instanceof FuguParseError && e.code === "parse",
+  );
 });
 
 test("internal timeout -> FuguTimeoutError (retryable)", async () => {
   const fn = throwingFetch(Object.assign(new Error("timed out"), { name: "TimeoutError" }));
-  await assert.rejects(() => client(fn).respond("x"), (e: unknown) => e instanceof FuguTimeoutError && e.isRetryable === true);
+  await assert.rejects(
+    () => client(fn).respond("x"),
+    (e: unknown) => e instanceof FuguTimeoutError && e.isRetryable === true,
+  );
 });
 
 test("caller abort -> FuguAbortError (not retryable)", async () => {
@@ -215,11 +259,20 @@ test("caller abort -> FuguAbortError (not retryable)", async () => {
 
 test("network failure -> FuguConnectionError (retryable)", async () => {
   const fn = throwingFetch(new Error("ECONNREFUSED 127.0.0.1:443"));
-  await assert.rejects(() => client(fn).respond("x"), (e: unknown) => e instanceof FuguConnectionError && e.isRetryable === true);
+  await assert.rejects(
+    () => client(fn).respond("x"),
+    (e: unknown) => e instanceof FuguConnectionError && e.isRetryable === true,
+  );
 });
 
 test("throwOnIncomplete throws FuguIncompleteError on an incomplete response", async () => {
-  const { fn } = mockFetch(() => jsonResponse({ status: "incomplete", incomplete_details: { reason: "max_output_tokens" }, output_text: "" }));
+  const { fn } = mockFetch(() =>
+    jsonResponse({
+      status: "incomplete",
+      incomplete_details: { reason: "max_output_tokens" },
+      output_text: "",
+    }),
+  );
   await assert.rejects(
     () => client(fn).respond("x", { throwOnIncomplete: true }),
     (e: unknown) => e instanceof FuguIncompleteError && /max_output_tokens/.test((e as Error).message),
@@ -227,7 +280,13 @@ test("throwOnIncomplete throws FuguIncompleteError on an incomplete response", a
 });
 
 test("incomplete response is surfaced (not thrown) by default", async () => {
-  const { fn } = mockFetch(() => jsonResponse({ status: "incomplete", incomplete_details: { reason: "content_filter" }, output_text: "partial" }));
+  const { fn } = mockFetch(() =>
+    jsonResponse({
+      status: "incomplete",
+      incomplete_details: { reason: "content_filter" },
+      output_text: "partial",
+    }),
+  );
   const res = await client(fn).respond("x");
   assert.equal(res.status, "incomplete");
   assert.equal(res.incompleteReason, "content_filter");
@@ -284,13 +343,22 @@ test("parseUsage maps chat-style prompt/completion tokens", () => {
 test("parseResponseMeta derives status from finish_reason and incomplete_details", () => {
   assert.equal(parseResponseMeta({ choices: [{ finish_reason: "length" }] }).status, "incomplete");
   assert.equal(parseResponseMeta({ choices: [{ finish_reason: "stop" }] }).status, "completed");
-  assert.equal(parseResponseMeta({ status: "incomplete", incomplete_details: { reason: "x" } }).incompleteReason, "x");
+  assert.equal(
+    parseResponseMeta({ status: "incomplete", incomplete_details: { reason: "x" } }).incompleteReason,
+    "x",
+  );
   assert.equal(parseResponseMeta({}).status, "unknown");
 });
 
 test("extractResponsesText preserves intentional whitespace output_text", () => {
   assert.equal(extractResponsesText({ output_text: "\n\n" }), "\n\n");
   assert.equal(extractResponsesText({}), "");
+});
+
+test("extractChatText reads choices[0].message.content (string or parts)", () => {
+  assert.equal(extractChatText({ choices: [{ message: { content: "hi" } }] }), "hi");
+  assert.equal(extractChatText({ choices: [{ message: { content: [{ text: "a" }, { text: "b" }] } }] }), "ab");
+  assert.equal(extractChatText({}), "");
 });
 
 test("parseApiError never returns the raw body and caps length", () => {

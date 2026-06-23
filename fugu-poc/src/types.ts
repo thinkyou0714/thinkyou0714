@@ -60,7 +60,10 @@ export function parseUsage(raw: unknown): FuguUsage {
     vals.find((v) => v !== undefined);
   return {
     inputTokens: firstDefined(asNumber(getProp(u, "input_tokens")), asNumber(getProp(u, "prompt_tokens"))),
-    outputTokens: firstDefined(asNumber(getProp(u, "output_tokens")), asNumber(getProp(u, "completion_tokens"))),
+    outputTokens: firstDefined(
+      asNumber(getProp(u, "output_tokens")),
+      asNumber(getProp(u, "completion_tokens")),
+    ),
     totalTokens: asNumber(getProp(u, "total_tokens")),
     cachedInputTokens: asNumber(getProp(inDetails, "cached_tokens")),
     orchestrationInputTokens: firstDefined(
@@ -144,7 +147,9 @@ export function extractChatText(raw: unknown): string {
   const content = getProp(getProp(choices[0], "message"), "content");
   if (typeof content === "string") return content;
   if (Array.isArray(content)) {
-    return content.map((p) => (typeof getProp(p, "text") === "string" ? (getProp(p, "text") as string) : "")).join("");
+    return content
+      .map((p) => (typeof getProp(p, "text") === "string" ? (getProp(p, "text") as string) : ""))
+      .join("");
   }
   return "";
 }
