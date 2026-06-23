@@ -15,6 +15,9 @@ export const DEFAULT_BASE_URL = "https://api.sakana.ai/v1";
 /** "fugu" = fast / low-latency, "fugu-ultra" = max quality. */
 export const DEFAULT_MODEL = "fugu-ultra";
 
+/** Fugu accepts these `reasoning.effort` values (other values are rejected). */
+export type ReasoningEffort = "high" | "xhigh" | "max";
+
 export interface LoadConfigOptions {
   /** Defaults to process.env. Inject a map for tests. */
   env?: Record<string, string | undefined>;
@@ -23,6 +26,17 @@ export interface LoadConfigOptions {
 /** Strip trailing slashes so we can safely concatenate paths. */
 export function normalizeBaseUrl(url: string): string {
   return url.replace(/\/+$/, "");
+}
+
+/**
+ * Default per-request timeout. Fugu's orchestration latency is unbounded relative
+ * to a single model — a flat 60s aborts legitimate `fugu-ultra` / high-effort runs —
+ * so the default scales with the model and reasoning effort.
+ */
+export function defaultTimeoutMs(model: string, effort?: ReasoningEffort): number {
+  if (effort === "xhigh" || effort === "max") return 30 * 60_000; // 30 min
+  if (model.startsWith("fugu-ultra")) return 10 * 60_000; // 10 min
+  return 120_000; // 2 min
 }
 
 /**
