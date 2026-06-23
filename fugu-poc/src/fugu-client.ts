@@ -22,6 +22,7 @@ import {
   FuguParseError,
   FuguIncompleteError,
   FuguBadRequestError,
+  FuguValidationError,
   errorFromResponse,
 } from "./errors.ts";
 import { computeCost, DEFAULT_PRICES } from "./pricing.ts";
@@ -38,6 +39,11 @@ import {
   extractStreamFinishReason,
 } from "./stream.ts";
 import type { BudgetGuard } from "./budget.ts";
+import { mapToolsForResponses, mapToolsForChat, parseToolCalls } from "./tools.ts";
+import type { FuguTool, ToolChoice } from "./tools.ts";
+import { parseJsonLoose } from "./json.ts";
+import { noopLogger } from "./observe.ts";
+import type { Logger, RequestEvent, ResponseEvent } from "./observe.ts";
 
 export type { FuguResult, FuguUsage, ResponseStatus } from "./types.ts";
 export * from "./errors.ts";
@@ -60,6 +66,12 @@ export interface FuguClientOptions extends FuguConfig {
   maxInputChars?: number;
   /** Optional spend guard; throws FuguBudgetError once the limit would be exceeded. */
   budget?: BudgetGuard;
+  /** Called before each network attempt (incl. retries) — metadata only, no content. */
+  onRequest?: (event: RequestEvent) => void;
+  /** Called after a result is built — metadata only (model, status, tokens, cost). */
+  onResponse?: (event: ResponseEvent) => void;
+  /** Structured logger (defaults to a no-op). Wire pino/console/OpenTelemetry here. */
+  logger?: Logger;
 }
 
 export interface GenerateOptions {
@@ -81,6 +93,14 @@ export interface GenerateOptions {
   idempotencyKey?: string;
   /** Throw FuguIncompleteError when the response status is "incomplete". */
   throwOnIncomplete?: boolean;
+  /** Tools the model may call (function tools + the built-in web_search). */
+  tools?: FuguTool[];
+  /** Tool-choice policy: "auto" | "none" | "required". */
+  toolChoice?: ToolChoice;
+  /** Responses API: chain from a prior response id (server-side state). */
+  previousResponseId?: string;
+  /** Responses API: persist this response server-side (enables chaining). */
+  store?: boolean;
   /** Extra body params merged into the request (e.g. { temperature: 0.2 }). */
   params?: Record<string, unknown>;
 }
@@ -116,6 +136,9 @@ export class FuguClient {
   private readonly maxOutputTokens?: number;
   private readonly maxInputChars: number;
   private readonly budget?: BudgetGuard;
+  private readonly onRequest?: (event: RequestEvent) => void;
+  private readonly onResponse?: (event: ResponseEvent) => void;
+  private readonly logger: Logger;
 
   constructor(options: FuguClientOptions) {
     this.apiKey = (options.apiKey ?? "").trim();
@@ -132,6 +155,9 @@ export class FuguClient {
     this.maxOutputTokens = options.maxOutputTokens;
     this.maxInputChars = options.maxInputChars ?? 4_000_000;
     this.budget = options.budget;
+    this.onRequest = options.onRequest;
+    this.onResponse = options.onResponse;
+    this.logger = options.logger ?? noopLogger;
     if (typeof this.fetchImpl !== "function") {
       throw new FuguConfigError("No fetch implementation available. Use Node >= 18 or pass options.fetch.");
     }
@@ -141,23 +167,136 @@ export class FuguClient {
   async respond(input: string, opts: GenerateOptions = {}): Promise<FuguResult> {
     this.guardInput(input.length);
     const model = opts.model ?? this.model;
+    const start = Date.now();
     const body: Record<string, unknown> = { ...(opts.params ?? {}), model, input };
     if (opts.instructions) body.instructions = opts.instructions;
     if (opts.reasoningEffort) body.reasoning = { effort: opts.reasoningEffort };
+    if (opts.tools) body.tools = mapToolsForResponses(opts.tools);
+    if (opts.toolChoice) body.tool_choice = opts.toolChoice;
+    if (opts.previousResponseId) body.previous_response_id = opts.previousResponseId;
+    if (opts.store !== undefined) body.store = opts.store;
     this.applyOutputCap(body, "max_output_tokens", opts);
     const { json, requestId } = await this.request("/responses", body, model, opts);
-    return this.buildResult(json, model, extractResponsesText(json), requestId, opts);
+    const result = this.buildResult(json, model, extractResponsesText(json), requestId, opts);
+    this.emitResponse("/responses", model, result, Date.now() - start);
+    return result;
   }
 
   /** Chat Completions API. */
   async chat(messages: ChatMessage[], opts: GenerateOptions = {}): Promise<FuguResult> {
     this.guardInput(messages.reduce((n, m) => n + m.content.length, 0));
     const model = opts.model ?? this.model;
+    const start = Date.now();
     const body: Record<string, unknown> = { ...(opts.params ?? {}), model, messages };
     if (opts.reasoningEffort) body.reasoning = { effort: opts.reasoningEffort };
+    if (opts.tools) body.tools = mapToolsForChat(opts.tools);
+    if (opts.toolChoice) body.tool_choice = opts.toolChoice;
     this.applyOutputCap(body, "max_completion_tokens", opts);
     const { json, requestId } = await this.request("/chat/completions", body, model, opts);
-    return this.buildResult(json, model, extractChatText(json), requestId, opts);
+    const result = this.buildResult(json, model, extractChatText(json), requestId, opts);
+    this.emitResponse("/chat/completions", model, result, Date.now() - start);
+    return result;
+  }
+
+  /**
+   * Agentic tool loop on Chat Completions: calls the model, runs any requested tools
+   * via `handlers`, feeds the results back, and repeats up to `maxIterations` (default 5).
+   */
+  async runTools(
+    messages: Array<ChatMessage | Record<string, unknown>>,
+    opts: GenerateOptions & {
+      handlers: Record<string, (args: unknown) => unknown | Promise<unknown>>;
+      maxIterations?: number;
+    },
+  ): Promise<FuguResult> {
+    const model = opts.model ?? this.model;
+    const tools = opts.tools ? mapToolsForChat(opts.tools) : undefined;
+    const maxIterations = Math.max(1, opts.maxIterations ?? 5);
+    const conversation: unknown[] = [...messages];
+    let result: FuguResult | undefined;
+
+    for (let i = 0; i < maxIterations; i += 1) {
+      const start = Date.now();
+      const body: Record<string, unknown> = { ...(opts.params ?? {}), model, messages: conversation };
+      if (tools) body.tools = tools;
+      if (opts.toolChoice) body.tool_choice = opts.toolChoice;
+      if (opts.reasoningEffort) body.reasoning = { effort: opts.reasoningEffort };
+      this.applyOutputCap(body, "max_completion_tokens", opts);
+      const { json, requestId } = await this.request("/chat/completions", body, model, opts);
+      result = this.buildResult(json, model, extractChatText(json), requestId, opts);
+      this.emitResponse("/chat/completions", model, result, Date.now() - start);
+
+      const calls = result.toolCalls ?? [];
+      if (calls.length === 0) return result;
+
+      conversation.push(rawAssistantMessage(json) ?? { role: "assistant", content: result.text });
+      for (const call of calls) {
+        const handler = opts.handlers[call.name];
+        let output: unknown;
+        if (!handler) {
+          output = { error: `No handler registered for tool "${call.name}".` };
+        } else {
+          try {
+            output = await handler(safeParse(call.arguments));
+          } catch (err) {
+            output = { error: err instanceof Error ? err.message : String(err) };
+          }
+        }
+        conversation.push({
+          role: "tool",
+          tool_call_id: call.id,
+          content: typeof output === "string" ? output : JSON.stringify(output),
+        });
+      }
+    }
+    // Reached the iteration cap; return the last result (may still carry tool calls).
+    return result as FuguResult;
+  }
+
+  /**
+   * Structured output with a validate-and-repair loop. Requests a JSON schema (if given),
+   * parses loosely, runs `validate`, and on failure feeds the error back up to
+   * `repairAttempts` times (default 1) before throwing FuguValidationError.
+   */
+  async respondJson<T = unknown>(
+    input: string,
+    opts: GenerateOptions & {
+      schema?: Record<string, unknown>;
+      schemaName?: string;
+      validate?: (value: unknown) => T;
+      repairAttempts?: number;
+    } = {},
+  ): Promise<{ data: T; result: FuguResult }> {
+    const repairAttempts = opts.repairAttempts ?? 1;
+    const params: Record<string, unknown> = { ...(opts.params ?? {}) };
+    if (opts.schema) {
+      params.text = {
+        format: { type: "json_schema", name: opts.schemaName ?? "output", strict: true, schema: opts.schema },
+      };
+    }
+    let currentInput = input;
+    let lastError = "unknown error";
+    for (let attempt = 0; attempt <= repairAttempts; attempt += 1) {
+      const result = await this.respond(currentInput, { ...opts, params });
+      let parsed: unknown;
+      try {
+        parsed = parseJsonLoose(result.text);
+      } catch (err) {
+        lastError = `output was not valid JSON (${err instanceof Error ? err.message : String(err)})`;
+        currentInput = `${input}\n\nYour previous reply was invalid: ${lastError}. Return ONLY corrected JSON.`;
+        continue;
+      }
+      try {
+        const data = opts.validate ? opts.validate(parsed) : (parsed as T);
+        return { data, result };
+      } catch (err) {
+        lastError = `validation failed (${err instanceof Error ? err.message : String(err)})`;
+        currentInput = `${input}\n\nYour previous reply failed validation: ${lastError}. Return ONLY corrected JSON.`;
+      }
+    }
+    throw new FuguValidationError(
+      `Structured output failed after ${repairAttempts + 1} attempt(s): ${lastError}`,
+    );
   }
 
   /** Streaming Responses API. Yields text deltas then a terminal aggregated result. */
@@ -225,6 +364,7 @@ export class FuguClient {
       usage,
       costUsd: computeCost(model, usage, this.priceTable),
       requestId,
+      toolCalls: parseToolCalls(raw),
     };
     this.budget?.record(result.costUsd);
     if (opts.throwOnIncomplete && meta.status === "incomplete") {
@@ -234,6 +374,19 @@ export class FuguClient {
       );
     }
     return result;
+  }
+
+  private emitResponse(path: string, model: string, result: FuguResult, durationMs: number): void {
+    if (!this.onResponse) return;
+    this.onResponse({
+      path,
+      model,
+      status: result.status,
+      durationMs,
+      usage: result.usage,
+      costUsd: result.costUsd,
+      requestId: result.requestId,
+    });
   }
 
   private headers(idempotencyKey?: string): Record<string, string> {
@@ -286,7 +439,9 @@ export class FuguClient {
     model: string,
     opts: GenerateOptions,
     idempotencyKey: string,
+    attempt: number,
   ): Promise<RawResponse> {
+    this.onRequest?.({ path, model, attempt });
     const url = `${this.baseUrl}${path}`;
     const timeoutMs = opts.timeoutMs ?? this.timeoutOverrideMs ?? defaultTimeoutMs(model, opts.reasoningEffort);
     const res = await this.doFetch(
@@ -327,10 +482,12 @@ export class FuguClient {
     const maxRetries = opts.maxRetries ?? this.retry.maxRetries;
     for (let attempt = 0; ; attempt += 1) {
       try {
-        return await this.sendOnce(path, body, model, opts, idempotencyKey);
+        return await this.sendOnce(path, body, model, opts, idempotencyKey, attempt);
       } catch (err) {
         if (!(err instanceof FuguError) || !err.isRetryable || attempt >= maxRetries) throw err;
-        await sleep(retryDelayMs(err, attempt, this.retry), opts.signal);
+        const delayMs = retryDelayMs(err, attempt, this.retry);
+        this.logger.debug("fugu: retrying after error", { path, attempt, delayMs, code: err.code });
+        await sleep(delayMs, opts.signal);
       }
     }
   }
@@ -408,6 +565,23 @@ export class FuguClient {
     });
     yield { type: "done", result };
   }
+}
+
+function safeParse(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
+function rawAssistantMessage(json: unknown): Record<string, unknown> | undefined {
+  const choices = (json as { choices?: unknown })?.choices;
+  if (Array.isArray(choices) && choices[0] && typeof choices[0] === "object") {
+    const message = (choices[0] as { message?: unknown }).message;
+    if (message && typeof message === "object") return message as Record<string, unknown>;
+  }
+  return undefined;
 }
 
 /** Build a client straight from a loaded config. */

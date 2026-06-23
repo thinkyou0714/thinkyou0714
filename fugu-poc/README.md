@@ -26,6 +26,10 @@ to answer directly or to delegate to and synthesize a team of expert frontier mo
 - **Streaming** (`respondStream` / `chatStream`) over SSE — zero-dep.
 - **Cost controls:** a `BudgetGuard` spend circuit-breaker, output-token + input-size
   caps, and `chooseModel()` routing (`fugu` ↔ `fugu-ultra`).
+- **Tool calling** (`tools` + `runTools` agentic loop, built-in `web_search`),
+  **structured output** (`respondJson` with validate-and-repair), stateful
+  **`Conversation`** chaining, and **observability hooks** (`onRequest` / `onResponse` /
+  `logger` — wire pino/OpenTelemetry; the core stays dependency-free).
 
 ## Install
 
@@ -76,6 +80,30 @@ for await (const ev of client.respondStream(prompt, { model })) {
 }
 ```
 
+### Tools, structured output, observability
+
+```ts
+import { createClient, loadConfig, functionTool, webSearchTool } from "fugu-poc";
+
+const client = createClient(loadConfig(), { onResponse: (e) => metrics.record(e) });
+
+// agentic tool loop
+const res = await client.runTools([{ role: "user", content: "weather in Tokyo?" }], {
+  tools: [functionTool("getWeather", { parameters: { type: "object", properties: { city: { type: "string" } } } }), webSearchTool()],
+  handlers: { getWeather: async (args) => fetchWeather((args as { city: string }).city) },
+});
+
+// structured output with validate-and-repair
+const { data } = await client.respondJson<{ score: number }>("Rate this 1-10", {
+  schema: { type: "object", properties: { score: { type: "number" } }, required: ["score"] },
+  validate: (v) => {
+    const o = v as { score?: unknown };
+    if (typeof o.score !== "number") throw new Error("score must be a number");
+    return o as { score: number };
+  },
+});
+```
+
 ### Optional OpenAI-SDK adapter
 
 ```ts
@@ -113,9 +141,13 @@ fugu-poc/
 │   ├── budget.ts       # BudgetGuard spend circuit-breaker
 │   ├── routing.ts      # chooseModel() policy
 │   ├── stream.ts       # SSE parsing
+│   ├── tools.ts        # tool-calling types + parsing
+│   ├── json.ts         # loose JSON extraction (structured output)
+│   ├── observe.ts      # logging / metrics hooks
+│   ├── conversation.ts # stateful Responses chaining
 │   ├── cli.ts          # CLI (bin: fugu)
 │   └── openai.ts       # optional ./openai adapter
-├── test/               # fugu-client / timeout / p2 tests
+├── test/               # fugu-client / timeout / p2 / p3 tests
 ├── .github/workflows/  # ci / release (changesets + npm OIDC) / codeql (templates)
 └── tsdown.config.ts · biome.json · .changeset · tsconfig.json
 ```

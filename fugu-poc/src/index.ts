@@ -16,7 +16,14 @@ export type {
 } from "./fugu-client.ts";
 
 export { parseUsage, parseResponseMeta, extractResponsesText, extractChatText } from "./types.ts";
-export type { FuguResult, FuguUsage, ResponseStatus } from "./types.ts";
+export type { FuguResult, FuguUsage, ResponseStatus, FuguToolCall } from "./types.ts";
+
+export { functionTool, webSearchTool, mapToolsForResponses, mapToolsForChat, parseToolCalls } from "./tools.ts";
+export type { FuguTool, ToolChoice } from "./tools.ts";
+export { parseJsonLoose } from "./json.ts";
+export { Conversation } from "./conversation.ts";
+export { noopLogger } from "./observe.ts";
+export type { Logger, RequestEvent, ResponseEvent } from "./observe.ts";
 
 export * from "./errors.ts";
 

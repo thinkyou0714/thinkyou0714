@@ -21,6 +21,15 @@ export interface FuguUsage {
   raw?: unknown;
 }
 
+export interface FuguToolCall {
+  /** Tool-call id (Responses `call_id` / Chat `id`). */
+  id: string;
+  /** Function / tool name. */
+  name: string;
+  /** Raw JSON-string arguments as returned by the model. */
+  arguments: string;
+}
+
 export interface FuguResult {
   /** Best-effort plain-text extraction of the model output. */
   text: string;
@@ -42,6 +51,8 @@ export interface FuguResult {
   costUsd?: number;
   /** `x-request-id` from the response, for support tickets. */
   requestId?: string;
+  /** Parsed tool/function calls the model requested, if any. */
+  toolCalls?: FuguToolCall[];
 }
 
 function getProp(obj: unknown, key: string): unknown {
