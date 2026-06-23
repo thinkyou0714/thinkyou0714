@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 /**
  * Tiny CLI for the Fugu PoC.
  *
