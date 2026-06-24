@@ -35,8 +35,10 @@ to answer directly or to delegate to and synthesize a team of expert frontier mo
   tool can target Fugu — with failover — at a `localhost` endpoint; a **Fugu MCP
   server** (`integrations/mcp/`, `fugu_respond` / `fugu_chat`) for Claude Code / Cursor / Codex;
   a zero-dep **`fugu-obsidian`** CLI (`integrations/obsidian/`) that answers questions
-  about your Obsidian notes via the Local REST API; and an **n8n community node**
-  (`integrations/n8n/`) — a declarative `Fugu` node + `Fugu API` credential.
+  about your Obsidian notes via the Local REST API; an **n8n community node**
+  (`integrations/n8n/`) — a declarative `Fugu` node + `Fugu API` credential; and a
+  Claude Code **`/fugu` skill + `fugu` subagent** (`.claude/`, mirrored as a Cursor command)
+  that routes "second opinion" / adversarial-review asks to the MCP server.
 
 ## Install
 
@@ -178,6 +180,8 @@ fugu-poc/
 │   ├── mcp/            # Fugu MCP server (own package; @modelcontextprotocol/sdk + zod)
 │   ├── obsidian/       # fugu-obsidian CLI (own package; zero-dep, Local REST API)
 │   └── n8n/            # n8n-nodes-fugu (own package; declarative node + credential)
+├── .claude/           # /fugu skill + fugu subagent (delegate to the MCP server)
+├── .cursor/           # mirrored Cursor command
 ├── .github/workflows/  # ci / release (changesets + npm OIDC) / codeql (templates)
 └── tsdown.config.ts · biome.json · .changeset · tsconfig.json
 ```
