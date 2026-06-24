@@ -12,12 +12,18 @@ import { createHash } from "node:crypto";
 import type { FuguResult } from "./types.ts";
 
 export interface RequestCache {
+  /**
+   * Return the cached result for `key`, or undefined. Implementations MUST return an
+   * isolated copy (value semantics) — callers may read/mutate `raw`/`usage` in place.
+   */
   get(key: string): Promise<FuguResult | undefined>;
   set(key: string, value: FuguResult): Promise<void>;
 }
 
 /** Recursively sort object keys so the hash is independent of property insertion order. */
 function canonical(value: unknown): unknown {
+  // Non-finite numbers would all become `null` under JSON.stringify (NaN==Infinity collision).
+  if (typeof value === "number" && !Number.isFinite(value)) return { __nonfinite: String(value) };
   if (Array.isArray(value)) return value.map(canonical);
   if (value && typeof value === "object") {
     const src = value as Record<string, unknown>;
@@ -88,12 +94,17 @@ export class MemoryCache implements RequestCache {
     this.entries.set(key, entry);
     this.hits++;
     this.costSavedUsd += entry.value.costUsd ?? 0;
-    return entry.value;
+    // Clone on the way out so a caller mutating raw/usage can't poison the stored entry.
+    return structuredClone(entry.value);
   }
 
   async set(key: string, value: FuguResult): Promise<void> {
     this.entries.delete(key);
-    this.entries.set(key, { value, expiresAt: this.ttlMs > 0 ? Date.now() + this.ttlMs : 0 });
+    // Clone on the way in so the caller's later mutations don't reach back into the cache.
+    this.entries.set(key, {
+      value: structuredClone(value),
+      expiresAt: this.ttlMs > 0 ? Date.now() + this.ttlMs : 0,
+    });
     while (this.entries.size > this.maxEntries) {
       const oldest = this.entries.keys().next().value;
       if (oldest === undefined) break;

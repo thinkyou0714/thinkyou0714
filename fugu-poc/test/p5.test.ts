@@ -176,3 +176,88 @@ test("SingleFlight runs distinct keys independently", async () => {
   await Promise.all([sf.run("a", task), sf.run("b", task)]);
   assert.equal(calls, 2);
 });
+
+test("SingleFlight frees the key and shares a rejection with all callers", async () => {
+  const sf = new SingleFlight();
+  let calls = 0;
+  const task = async () => {
+    calls++;
+    await Promise.resolve();
+    throw new Error("nope");
+  };
+  const a = sf.run("k", task);
+  const b = sf.run("k", task);
+  await assert.rejects(a, /nope/);
+  await assert.rejects(b, /nope/);
+  assert.equal(calls, 1, "the shared key executes once even on rejection");
+  assert.equal(sf.size, 0, "a rejected key is released");
+});
+
+test("SingleFlight does not poison a key when the task throws synchronously", async () => {
+  const sf = new SingleFlight();
+  let calls = 0;
+  const syncThrow = (() => {
+    calls++;
+    throw new Error("sync boom");
+  }) as () => Promise<never>;
+  await assert.rejects(sf.run("k", syncThrow), /sync boom/);
+  assert.equal(sf.size, 0, "key freed after a synchronous throw");
+  const recovered = await sf.run("k", async () => "recovered");
+  assert.equal(recovered, "recovered", "a later call re-executes rather than returning the stuck rejection");
+  assert.equal(calls, 1);
+});
+
+test("WorkPool holds the limit when work is submitted mid-drain", async () => {
+  const pool = new WorkPool(1);
+  let active = 0;
+  let max = 0;
+  const track = async () => {
+    active++;
+    max = Math.max(max, active);
+    await Promise.resolve();
+    await Promise.resolve();
+    active--;
+  };
+  const ps: Promise<void>[] = [];
+  for (let i = 0; i < 5; i++) ps.push(pool.run(track));
+  // Submit more work across microtask gaps, exactly the window where a naive pool over-admits.
+  for (let i = 0; i < 5; i++) {
+    await Promise.resolve();
+    ps.push(pool.run(track));
+  }
+  await Promise.all(ps);
+  assert.equal(max, 1, "never more than `concurrency` tasks run at once");
+});
+
+// ---------- cache value-semantics & key edge cases ----------
+
+test("MemoryCache returns isolated copies — mutating a hit can't poison the cache", async () => {
+  const c = new MemoryCache();
+  await c.set("k", mk("v"));
+  const first = await c.get("k");
+  if (first) {
+    first.text = "changed";
+    (first.raw as Record<string, unknown>).mutated = true;
+  }
+  const second = await c.get("k");
+  assert.equal(second?.text, "v");
+  assert.deepEqual(second?.raw, {});
+});
+
+test("MemoryCache isolates from later mutation of the set value", async () => {
+  const c = new MemoryCache();
+  const v = mk("v");
+  await c.set("k", v);
+  v.text = "mutated after set";
+  const got = await c.get("k");
+  assert.equal(got?.text, "v");
+});
+
+test("cacheKeyFor distinguishes non-finite numbers instead of collapsing them to null", () => {
+  const nan = cacheKeyFor("/responses", { input: "x", params: { t: Number.NaN } });
+  const inf = cacheKeyFor("/responses", { input: "x", params: { t: Number.POSITIVE_INFINITY } });
+  const nul = cacheKeyFor("/responses", { input: "x", params: { t: null } });
+  assert.notEqual(nan, inf);
+  assert.notEqual(nan, nul);
+  assert.notEqual(inf, nul);
+});

@@ -61,13 +61,30 @@ export interface CascadeOutcome {
   verdicts: JudgeVerdict[];
 }
 
-/** Clamp/parse a model-emitted confidence into 0..1 (tolerates "85" meaning 0.85). */
+function clamp01(n: number): number {
+  return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 0;
+}
+
+/**
+ * Parse a model-emitted confidence into 0..1. Handles the canonical `0.85` / `1.0`, a bare
+ * `85` (→ 0.85), and `8 out of 10` / `8/10` ratios — without being fooled by version-like
+ * prefixes ("v2 score 0.8" → 0.8, not 0.02) or negatives.
+ */
 export function parseScore01(text: string): number {
-  const match = text.match(/(\d+(?:\.\d+)?)/);
-  if (!match) return 0;
-  let n = Number(match[1]);
-  if (n > 1 && n <= 100) n = n / 100;
-  return Math.max(0, Math.min(1, n));
+  const t = text.trim();
+  // "x / y" or "x out of y" ratio.
+  const ratio = t.match(/(\d+(?:\.\d+)?)\s*(?:\/|out of)\s*(\d+(?:\.\d+)?)/i);
+  if (ratio) {
+    const den = Number(ratio[2]);
+    if (den > 0) return clamp01(Number(ratio[1]) / den);
+  }
+  // Canonical 0..1 decimal (0, 0.x, 1, 1.0, .x) — not part of a larger or negative number.
+  const dec = t.match(/(?<![\d.-])(0(?:\.\d+)?|1(?:\.0+)?|\.\d+)(?![\d.])/);
+  if (dec) return clamp01(Number(dec[0]));
+  // Bare integer or percentage ("85", "85%") → divide by 100.
+  const pct = t.match(/(?<![\d.-])(\d{1,3})\s*%?(?![\d.])/);
+  if (pct) return clamp01(Number(pct[1]) / 100);
+  return 0;
 }
 
 /**

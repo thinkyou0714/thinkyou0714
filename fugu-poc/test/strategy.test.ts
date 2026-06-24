@@ -34,6 +34,16 @@ test("parseScore01 clamps and tolerates percentage-style scores", () => {
   assert.equal(parseScore01("nonsense"), 0);
 });
 
+test("parseScore01 resists version prefixes, ratios, and negatives", () => {
+  assert.equal(parseScore01("v2 score 0.8"), 0.8); // not 0.02 from the "2" in "v2"
+  assert.equal(parseScore01("8 out of 10"), 0.8); // not 0.08
+  assert.equal(parseScore01("8/10"), 0.8);
+  assert.equal(parseScore01("-0.5"), 0); // negative rejected
+  assert.equal(parseScore01("0"), 0);
+  assert.equal(parseScore01("0.0"), 0);
+  assert.equal(parseScore01("100"), 1); // 100% -> clamped to 1
+});
+
 // ---------- Cascade ----------
 
 test("Cascade stops at the cheap stage when the judge is confident", async () => {
@@ -180,4 +190,32 @@ test("llmGrader passes/fails on the neutral judge's score", async () => {
   );
   assert.equal(report.passed, 1);
   assert.equal(report.rows[0].score, 0.95);
+});
+
+test("runEval treats a throwing grader as a non-pass error row (not a crash)", async () => {
+  const client: Responder = {
+    async respond() {
+      return result("an answer");
+    },
+  };
+  const report = await runEval(client, [{ id: "a", input: "q" }], {
+    grader: () => {
+      throw new Error("grader boom");
+    },
+  });
+  assert.equal(report.passed, 0);
+  assert.equal(report.rows[0].error, "grader boom");
+});
+
+test("runEval aggregates an empty case list without dividing by zero", async () => {
+  const client: Responder = {
+    async respond() {
+      return result("");
+    },
+  };
+  const report = await runEval(client, [], { grader: exactGrader() });
+  assert.deepEqual(
+    [report.total, report.passRate, report.avgScore, report.avgLatencyMs, report.totalCostUsd],
+    [0, 0, 0, 0, 0],
+  );
 });

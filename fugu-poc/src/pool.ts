@@ -25,14 +25,19 @@ export class WorkPool {
 
   async run<T>(task: () => Promise<T>, priority = 0): Promise<T> {
     if (this.active >= this.concurrency) {
+      // Wait for a slot. We are woken by a hand-off (below), inheriting the freed slot —
+      // so we must NOT increment `active` here, or two runners would share one slot.
       await new Promise<void>((resolve) => this.enqueue({ priority, resolve }));
+    } else {
+      this.active++;
     }
-    this.active++;
     try {
       return await task();
     } finally {
-      this.active--;
-      this.waiters.shift()?.resolve();
+      const next = this.waiters.shift();
+      if (next)
+        next.resolve(); // hand our slot directly to the next waiter (keep `active`)
+      else this.active--; // no waiter: release the slot
     }
   }
 
@@ -68,13 +73,13 @@ export class SingleFlight {
   run<T>(key: string, task: () => Promise<T>): Promise<T> {
     const existing = this.inflight.get(key) as Promise<T> | undefined;
     if (existing) return existing;
-    const promise = (async () => {
-      try {
-        return await task();
-      } finally {
-        this.inflight.delete(key);
-      }
-    })();
+    // `Promise.resolve().then(task)` defers `task()` to a microtask, so even a SYNCHRONOUS
+    // throw becomes a rejection of `promise` (not of `run`), and `set` below always runs
+    // before the `finally` cleanup — otherwise a sync-throwing task would leave the key
+    // stuck on a rejected promise forever.
+    const promise = Promise.resolve()
+      .then(task)
+      .finally(() => this.inflight.delete(key));
     this.inflight.set(key, promise);
     return promise;
   }
