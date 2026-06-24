@@ -18,6 +18,10 @@ messages.db
 .env.*
 !.env.example
 
+# --- Python artifacts (from local script runs) ---
+__pycache__/
+*.py[cod]
+
 # --- OS / editor cruft ---
 .DS_Store
 Thumbs.db
