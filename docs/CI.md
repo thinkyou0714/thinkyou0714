@@ -81,7 +81,8 @@ python3 .github/scripts/check_catalog.py
 
 ## Repository settings (human-applied, not committable)
 
-A few governance controls live in GitHub settings rather than in files. Recommended:
+A few governance controls live in GitHub settings rather than in files — a prioritized,
+checkbox version is kept in [`owner-tasks.md`](owner-tasks.md). Recommended:
 
 - **Branch protection / ruleset** on `main`: require a PR + the `lint` / `secrets-scan` /
   `dependency-review` / `codeql` checks, require up-to-date branches. (A repository **ruleset**
