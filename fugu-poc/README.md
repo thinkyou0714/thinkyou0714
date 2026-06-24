@@ -32,7 +32,8 @@ to answer directly or to delegate to and synthesize a team of expert frontier mo
   `logger` — wire pino/OpenTelemetry; the core stays dependency-free).
 - **Ecosystem:** a multi-provider **`FuguRouter`** (failover) and an OpenAI-compatible
   **proxy** (`createProxyServer` / `fugu-proxy` bin) so Cursor / n8n / any OpenAI-SDK
-  tool can target Fugu — with failover — at a `localhost` endpoint.
+  tool can target Fugu — with failover — at a `localhost` endpoint; plus a **Fugu MCP
+  server** (`integrations/mcp/`, `fugu_respond` / `fugu_chat`) for Claude Code / Cursor / Codex.
 
 ## Install
 
@@ -169,7 +170,8 @@ fugu-poc/
 │   ├── proxy.ts        # OpenAI-compatible proxy (bin: fugu-proxy)
 │   ├── cli.ts          # CLI (bin: fugu)
 │   └── openai.ts       # optional ./openai adapter
-├── test/               # fugu-client / timeout / p2 / p3 / p4 tests
+├── test/               # fugu-client / timeout / p2 / p3 / p4 / mcp tests
+├── integrations/mcp/   # Fugu MCP server (own package; @modelcontextprotocol/sdk + zod)
 ├── .github/workflows/  # ci / release (changesets + npm OIDC) / codeql (templates)
 └── tsdown.config.ts · biome.json · .changeset · tsconfig.json
 ```
