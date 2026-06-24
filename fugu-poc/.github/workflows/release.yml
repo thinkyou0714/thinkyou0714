@@ -1,0 +1,41 @@
+# Release via Changesets + npm Trusted Publishing (OIDC).
+# Template: active once this folder is its own repo.
+#
+# Trusted Publishing means NO long-lived NPM_TOKEN: configure the package's
+# trusted publisher on npmjs.com to point at this workflow, use npm >= 11.5.1,
+# and provenance attestations are generated automatically.
+#
+# NOTE: SHA-pin action refs before going live (Renovate handles it).
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - run: npm ci
+      - run: npm run build
+      - uses: changesets/action@v1
+        with:
+          version: npm run release:version
+          publish: npm run release:publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,8 @@
+{"id": "fact-capital", "input": "What is the capital of Australia? Answer with only the city name.", "reference": "Canberra", "tags": ["factual", "exact"]}
+{"id": "math-compound", "input": "A shirt costs $40. It is discounted 25%, then 10% sales tax is added to the discounted price. What is the final price in dollars? Answer with just the number.", "reference": "33", "tags": ["reasoning", "arithmetic"]}
+{"id": "code-fizzbuzz", "input": "Write a one-line Python expression (a list comprehension) that returns the FizzBuzz strings for 1..15. Reply with only the code.", "reference": "Fizz", "tags": ["code", "contains"]}
+{"id": "reason-transitivity", "input": "All Bloops are Razzies. All Razzies are Lazzies. Are all Bloops definitely Lazzies? Answer yes or no.", "reference": "yes", "tags": ["reasoning", "logic"]}
+{"id": "extract-email", "input": "Extract the email address from: 'Contact me at jane.doe+news@example.co.uk for details.' Reply with only the address.", "reference": "jane.doe+news@example.co.uk", "tags": ["extraction", "exact"]}
+{"id": "translate-fr", "input": "Translate 'The cat sleeps on the warm roof.' into French.", "reference": "Le chat dort sur le toit chaud", "tags": ["translation", "llm-judge"]}
+{"id": "summarize-tradeoff", "input": "In one sentence, summarize the central trade-off of using a single multi-agent orchestration API versus manually routing between several models yourself.", "tags": ["summarization", "llm-judge", "open-ended"]}
+{"id": "reason-date", "input": "If today is Wednesday, what day of the week is it 100 days from now? Answer with the weekday name.", "reference": "Friday", "tags": ["reasoning", "calendar"]}

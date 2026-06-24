@@ -1,0 +1,21 @@
+{
+  "name": "fugu-obsidian",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Ask Sakana Fugu about your Obsidian note (via the Local REST API plugin) and append the answer.",
+  "engines": {
+    "node": ">=22.9.0"
+  },
+  "bin": {
+    "fugu-obsidian": "./src/bin.ts"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/bin.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}

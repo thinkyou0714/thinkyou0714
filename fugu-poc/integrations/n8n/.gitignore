@@ -1,0 +1,4 @@
+node_modules/
+dist/
+# Peer dep (n8n-workflow) is supplied by the host n8n at runtime; the template floats.
+package-lock.json

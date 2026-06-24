@@ -1,0 +1,87 @@
+{
+  "name": "fugu-poc",
+  "version": "0.1.0",
+  "description": "Zero-dependency TypeScript client + CLI for the Sakana Fugu OpenAI-compatible API (Responses + Chat Completions).",
+  "type": "module",
+  "license": "MIT",
+  "author": "thinkyou0714",
+  "homepage": "https://github.com/thinkyou0714/fugu#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thinkyou0714/fugu.git"
+  },
+  "bugs": {
+    "url": "https://github.com/thinkyou0714/fugu/issues"
+  },
+  "keywords": [
+    "sakana",
+    "fugu",
+    "openai-compatible",
+    "llm",
+    "ai",
+    "cli",
+    "sdk"
+  ],
+  "engines": {
+    "node": ">=22.9.0"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    },
+    "./openai": {
+      "types": "./dist/openai.d.mts",
+      "import": "./dist/openai.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "bin": {
+    "fugu": "./dist/cli.mjs",
+    "fugu-proxy": "./dist/proxy-cli.mjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "start": "node --env-file-if-exists=.env --experimental-strip-types src/cli.ts",
+    "dev": "node --env-file-if-exists=.env --experimental-strip-types src/cli.ts",
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "test": "node --experimental-strip-types --test test/*.test.ts",
+    "coverage": "node --experimental-strip-types --test --experimental-test-coverage --test-coverage-lines=80 --test-coverage-branches=75 --test-coverage-functions=85 test/*.test.ts",
+    "check:exports": "npm run build && publint --strict && attw --pack --profile esm-only",
+    "prepublishOnly": "npm run build",
+    "changeset": "changeset",
+    "release:version": "changeset version",
+    "release:publish": "npm run build && changeset publish"
+  },
+  "peerDependencies": {
+    "openai": ">=4"
+  },
+  "peerDependenciesMeta": {
+    "openai": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.4",
+    "@biomejs/biome": "^2.5.0",
+    "@changesets/cli": "^2.31.0",
+    "@types/node": "^22.0.0",
+    "openai": "^6.44.0",
+    "publint": "^0.3.21",
+    "tsdown": "^0.22.3",
+    "typescript": "^5.6.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}
