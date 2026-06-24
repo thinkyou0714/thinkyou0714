@@ -50,6 +50,7 @@
   "scripts": {
     "start": "node --env-file-if-exists=.env --experimental-strip-types src/cli.ts",
     "dev": "node --env-file-if-exists=.env --experimental-strip-types src/cli.ts",
+    "smoke": "node --env-file-if-exists=.env --experimental-strip-types examples/smoke.ts",
     "build": "tsdown",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",

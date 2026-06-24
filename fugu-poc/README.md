@@ -7,8 +7,8 @@ one OpenAI-compatible endpoint: you send one request and Fugu decides internally
 to answer directly or to delegate to and synthesize a team of expert frontier models.
 
 > **Status:** unit-tested offline (mocked `fetch`) + e2e against a local socket stub. A
-> live call against `api.sakana.ai` needs a real `SAKANA_API_KEY` — supply one and run the
-> CLI to confirm end-to-end.
+> live call against `api.sakana.ai` needs a real `SAKANA_API_KEY` — supply one and run
+> `npm run smoke` to confirm end-to-end.
 
 ## Highlights
 
@@ -63,6 +63,20 @@ npx fugu --help
 
 `--usage` prints token usage (incl. orchestration) + estimated cost to stderr; `--json`
 prints the (redacted) raw response.
+
+## Verify your setup (live)
+
+Once you have a key, confirm a real round-trip works:
+
+```bash
+export SAKANA_API_KEY=...    # or: cp .env.example .env && edit
+npm run smoke                # one minimal call to api.sakana.ai
+```
+
+It prints a `PASS`/`FAIL` banner with latency + token usage. On failure it maps the error
+to a concrete fix (401 → re-copy the key, 403 → plan/model access, 429 → wait,
+connection/parse → check `SAKANA_BASE_URL`, timeout → raise/retry). Exit codes: `0` pass,
+`1` reached the API but failed, `2` not configured (no key) — so CI can skip cleanly.
 
 ## Programmatic
 
@@ -168,7 +182,8 @@ const res = await openai.responses.create({ model: "fugu-ultra", input: "hi" });
 Source runs directly via `node --experimental-strip-types` — no build needed for dev/tests.
 
 ```bash
-npm test            # 35 tests, offline (mocked fetch) + real timeout wiring
+npm test            # 157 tests, offline (mocked fetch) + real timeout wiring
+npm run smoke       # live: one real round-trip to api.sakana.ai (needs SAKANA_API_KEY)
 npm run coverage    # tests + coverage thresholds
 npm run typecheck   # tsc --noEmit (erasableSyntaxOnly)
 npm run lint        # biome
