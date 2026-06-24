@@ -1,0 +1,126 @@
+name: lint
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: ShellCheck hooks
+        run: shellcheck .claude/hooks/*.sh
+
+      - name: Hook never-fail smoke test
+        run: |
+          # SessionStart stdout becomes agent context; the hook must always exit 0.
+          for src in startup resume clear compact; do
+            if ! printf '{"source":"%s"}' "$src" | bash .claude/hooks/agmsg-bootstrap.sh >/dev/null; then
+              echo "::error::hook exited non-zero for source=$src (must never fail a session)"
+              exit 1
+            fi
+          done
+          # AGMSG_DEBUG=1 must also exit 0, and its debug logs must go to stderr only.
+          if ! printf '{"source":"startup"}' | AGMSG_DEBUG=1 bash .claude/hooks/agmsg-bootstrap.sh >/dev/null 2>&1; then
+            echo "::error::hook exited non-zero with AGMSG_DEBUG=1"
+            exit 1
+          fi
+          out="$(printf '{"source":"startup"}' | AGMSG_DEBUG=1 bash .claude/hooks/agmsg-bootstrap.sh 2>/dev/null)"
+          case "$out" in
+            *"[agmsg:debug]"*) echo "::error::AGMSG_DEBUG output leaked to stdout (must be stderr-only)"; exit 1 ;;
+          esac
+          echo "hook exits 0 for all SessionStart sources (incl. AGMSG_DEBUG=1)"
+
+      - name: Validate JSON configs
+        run: |
+          python3 - <<'PY'
+          import glob, json, sys
+          bad = 0
+          files = sorted(set(glob.glob(".claude/**/*.json", recursive=True) + ["renovate.json"]))
+          for f in files:
+              try:
+                  with open(f) as fh:
+                      json.load(fh)
+              except (OSError, json.JSONDecodeError) as e:
+                  print(f"::error file={f}::{e}")
+                  bad += 1
+          print(f"validated {len(files)} JSON config(s)")
+          sys.exit(1 if bad else 0)
+          PY
+
+      - name: Validate .claude/settings.json structure + hook paths
+        run: python3 .github/scripts/check_claude_settings.py
+
+      - name: Validate YAML configs
+        run: |
+          python3 -c "import yaml" 2>/dev/null || python3 -m pip install --quiet -r .github/requirements-ci.txt
+          python3 - <<'PY'
+          import glob, sys, yaml
+          bad = 0
+          files = sorted(glob.glob(".github/**/*.yml", recursive=True))
+          for f in files:
+              try:
+                  with open(f) as fh:
+                      yaml.safe_load(fh)
+              except yaml.YAMLError as e:
+                  print(f"::error file={f}::{e}")
+                  bad += 1
+          print(f"validated {len(files)} YAML config(s)")
+          sys.exit(1 if bad else 0)
+          PY
+
+      # actionlint is not on the Actions allow-list, so run the pinned, checksum-
+      # verified release binary in a run step. It also shellchecks every run: block.
+      # Renovate surfaces version bumps via the customManager in renovate.json;
+      # refresh ACTIONLINT_SHA256 from the release checksums (CI fails closed otherwise).
+      - name: Lint workflows (actionlint)
+        env:
+          ACTIONLINT_VERSION: 1.7.12
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          url="https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL "$url" -o /tmp/actionlint.tgz
+          echo "${ACTIONLINT_SHA256}  /tmp/actionlint.tgz" | sha256sum -c -
+          tar -xzf /tmp/actionlint.tgz -C /tmp actionlint
+          /tmp/actionlint -color
+
+      # ruff is not allow-listed either; same pinned, checksum-verified binary pattern.
+      # Config lives in .github/scripts/ruff.toml.
+      - name: Lint Python (ruff)
+        env:
+          RUFF_VERSION: 0.15.19
+          RUFF_SHA256: 0bfabff71f317e0e3b8c363043b888f045eff092073d5d9bd0ac7f8ede465711
+        run: |
+          url="https://github.com/astral-sh/ruff/releases/download/${RUFF_VERSION}/ruff-x86_64-unknown-linux-gnu.tar.gz"
+          curl -fsSL "$url" -o /tmp/ruff.tgz
+          echo "${RUFF_SHA256}  /tmp/ruff.tgz" | sha256sum -c -
+          tar -xzf /tmp/ruff.tgz -C /tmp
+          /tmp/ruff-x86_64-unknown-linux-gnu/ruff check --config .github/scripts/ruff.toml .github/scripts/
+
+      - name: Unit tests (link checker, settings, catalog)
+        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py'
+
+      # This repo allow-lists GitHub Actions, so the link/anchor check is a stdlib
+      # Python script (not a marketplace action). It verifies relative links exist,
+      # #anchors resolve to GitHub heading slugs, and images carry alt text.
+      - name: Check markdown links & anchors
+        run: python3 .github/scripts/check_md_links.py
+
+      - name: Check ideas-catalog numbering
+        run: python3 .github/scripts/check_catalog.py

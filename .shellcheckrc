@@ -1,0 +1,3 @@
+# ShellCheck config for this repo's hooks, so local runs and CI agree.
+# Follow any files a hook may `source` later (none today).
+external-sources=true
