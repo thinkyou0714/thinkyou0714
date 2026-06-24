@@ -40,6 +40,28 @@ export type { RequestCache, MemoryCacheOptions, CacheStats } from "./cache.ts";
 
 export { WorkPool, SingleFlight } from "./pool.ts";
 
+export { Cascade, statusJudge, llmJudge, parseScore01 } from "./cascade.ts";
+export type {
+  Responder,
+  CascadeStage,
+  CascadeOptions,
+  CascadeOutcome,
+  Judge,
+  JudgeVerdict,
+  LlmJudgeOptions,
+} from "./cascade.ts";
+
+export { runEval, containsGrader, exactGrader, llmGrader } from "./evals.ts";
+export type {
+  EvalCase,
+  EvalReport,
+  EvalRow,
+  Grader,
+  GradeResult,
+  RunEvalOptions,
+  LlmGraderOptions,
+} from "./evals.ts";
+
 export { chooseModel } from "./routing.ts";
 export type { FuguModel, RouteTask, RouteInput, RoutingPolicy } from "./routing.ts";
 
