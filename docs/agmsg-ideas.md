@@ -413,3 +413,36 @@ Cumulative catalog: **272 ideas**.
 270. **[done]** Independent **QA** stand-in pass (Fable 5 unavailable in-env — recorded honestly, not asserted as a Fable verdict).
 271. **[done]** The linters are **self-applying**: `ruff` lints its own new scripts and `check_catalog` validates this very list.
 272. **[rec]** Next round: revisit Scorecard-as-binary (#186), the catalog split (#237), and whichever human-settings (#252–259) the owner has since applied.
+
+---
+
+## Round 5 — implementing the remaining recommendations
+
+Asked to implement the **remaining** items, this round lands the committable ones — headlined by
+**OpenSSF Scorecard** as an allow-list-safe pinned binary (the #186 deferral), plus grouped
+Renovate updates, `plugin_habits`, generalized config validation, and the onboarding/why-versions
+docs. The human-only GitHub settings were re-confirmed **owner-only**: the GitHub MCP API available
+in-session has no tool to set topics/description/branch-protection/Discussions, so those stay
+documented, not faked. Cumulative catalog: **288 ideas**.
+
+### AG. Remaining recommendations — shipped
+
+273. **[done]** OpenSSF **Scorecard** as a pinned, checksum-verified `run:` binary (`scorecard.yml`) → SARIF to the Security tab via the allow-listed `github/codeql-action/upload-sarif`; default-branch only (schedule/push/dispatch), never gates a PR. Implements #186 inside the allow-list.
+274. **[done]** Renovate `customManager` extended to track the `scorecard` binary version (`ossf/scorecard`, `v`-stripped); SHA refreshed on bump (fails closed).
+275. **[done]** Renovate `packageRules` `groupName` batches GitHub-Action digest/version bumps into a single PR (#200).
+276. **[done]** `plugin_habits` added to `metrics.yml` (coding-time patterns) — fits the automation-dev profile (#249).
+277. **[done]** Generalized CI config validation: `lint` now JSON-validates all `.claude/**/*.json` + `renovate.json`, and YAML-validates all `.github/**/*.yml` (was `settings.json` + workflows only) (#216).
+278. **[done]** Onboarding flow diagram in `docs/agmsg.md` §1 (check → install → join → mode) (#238).
+279. **[done]** `AGMSG_DEBUG` troubleshooting tip added to the `agmsg-onboard` skill (#228).
+280. **[done]** "Why these versions" note for the pinned binaries (`actionlint`/`ruff`/`scorecard`) in `docs/CI.md` (#240).
+281. **[done]** README: a Scorecard badge + an explicit **Actions allow-list** callout in the governance section (#264).
+282. **[done]** `docs/CI.md` workflows table + allow-list section now document the Scorecard binary pattern.
+
+### AH. Remaining recommendations — confirmed owner-only / deferred
+
+283. **[human-settings]** Repo topics / description / homepage — verified there is **no** GitHub MCP tool to set them in this session; they remain a UI/API action for the owner (catalog #252–253).
+284. **[human-settings]** Branch protection / ruleset + secret-scanning push protection — same (no MCP tool here); owner-applied (catalog #256–257). Deliberately **not** auto-enabled even if possible — branch protection could disrupt a solo push flow without explicit consent.
+285. **[human-settings]** Discussions, social-preview image, OpenSSF Best-Practices self-cert, pinned-repos curation — owner-only; documented in `docs/CI.md` (catalog #254, #258–259).
+286. **[rec]** Once Scorecard has run on `main`, optionally publish results (`--publish` / `publish_results`) for the public securityscorecards.dev **score badge** — needs `id-token: write` and makes the score public (owner's call).
+287. **[roadmap]** `bats` functional hook tests (#212) — still deferred; the smoke test + `shellcheck` + `AGMSG_DEBUG` cover the contract, and a `bats` install widens CI surface for marginal gain.
+288. **[done]** Round-5 verification: full local gate green (generalized validators, `actionlint` incl. `scorecard.yml`, `ruff`, 27 tests, link/catalog/settings checks, hook smoke) + an independent QA stand-in pass.

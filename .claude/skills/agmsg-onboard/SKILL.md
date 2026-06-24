@@ -20,6 +20,8 @@ Run the bootstrap hook to see what's installed (it never fails):
 printf '{"source":"startup"}' | "${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/agmsg-bootstrap.sh"
 ```
 It reports one of: *ready* / *installed but missing sqlite3* / *not installed*.
+Stuck on an unexpected result? Re-run with `AGMSG_DEBUG=1` prefixed — the hook prints its
+decisions (deps, install state, join outcome) to **stderr** without touching stdout.
 
 ## 2. Install (only if "not installed")
 Pick one (preferred first):

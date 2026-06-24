@@ -30,6 +30,18 @@ Pick one path (preferred first):
 
 All three deposit files at `~/.agents/skills/agmsg/`. Restart the agent afterward.
 
+The end-to-end onboarding flow:
+
+```text
+SessionStart hook → "installed?"
+  ├─ no  → install (marketplace / npx / git clone) ─┐
+  └─ yes ───────────────────────────────────────────┤
+                                                     ▼
+                         join team 'thinkyou0714' (/agmsg)
+                                                     ▼
+                             set delivery mode  →  ready
+```
+
 ### Offline / air-gapped / missing deps
 The bootstrap hook (below) **never fails a session**. If sqlite3 or the network is missing it
 prints what to do and exits cleanly; install later and re-run `/agmsg`.

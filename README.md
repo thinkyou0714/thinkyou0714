@@ -9,6 +9,7 @@
 [![codeql](https://github.com/thinkyou0714/thinkyou0714/actions/workflows/codeql.yml/badge.svg)](https://github.com/thinkyou0714/thinkyou0714/actions/workflows/codeql.yml)
 [![secrets-scan](https://github.com/thinkyou0714/thinkyou0714/actions/workflows/secrets-scan.yml/badge.svg)](https://github.com/thinkyou0714/thinkyou0714/actions/workflows/secrets-scan.yml)
 [![dependency-review](https://github.com/thinkyou0714/thinkyou0714/actions/workflows/dependency-review.yml/badge.svg)](https://github.com/thinkyou0714/thinkyou0714/actions/workflows/dependency-review.yml)
+[![scorecard](https://github.com/thinkyou0714/thinkyou0714/actions/workflows/scorecard.yml/badge.svg)](https://github.com/thinkyou0714/thinkyou0714/actions/workflows/scorecard.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-db61a2.svg)](https://github.com/sponsors/thinkyou0714)
 
@@ -39,7 +40,7 @@ I run [**THINK YOU LAB**](https://github.com/thinkyou0714/lab-public) — a one-
 
 This profile doubles as a **governance showcase** — least-privilege, pinned, and self-validating:
 
-- 🔒 GitHub Actions pinned to commit SHAs (Renovate-maintained); `gitleaks`, `dependency-review`, and **CodeQL** (`security-extended`) gate every PR.
+- 🔒 GitHub Actions pinned to commit SHAs under an org **Actions allow-list** (Renovate-maintained); `gitleaks`, `dependency-review`, **CodeQL** (`security-extended`), and **OpenSSF Scorecard** watch the supply chain.
 - ✅ A self-validating `lint` workflow: shellcheck + `actionlint` + `ruff`, stdlib unit tests, and checks for settings, doc links/anchors/alt-text, and catalog numbering — see [`docs/CI.md`](docs/CI.md) · [decisions](docs/adr/README.md) · [changelog](CHANGELOG.md).
 - 🤝 Multi-agent coordination (Claude Code × Codex × Fable QA) runs over agmsg — protocol in [`docs/agmsg.md`](docs/agmsg.md) · [all docs](docs/README.md).
 

@@ -1,6 +1,13 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["local>thinkyou0714/.github", "helpers:pinGitHubActionDigests"],
+  "packageRules": [
+    {
+      "description": "Batch GitHub Action digest/version bumps into one PR.",
+      "matchManagers": ["github-actions"],
+      "groupName": "github-actions"
+    }
+  ],
   "customManagers": [
     {
       "customType": "regex",
@@ -18,6 +25,15 @@
       "matchStrings": ["RUFF_VERSION:\\s*(?<currentValue>\\S+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "astral-sh/ruff"
+    },
+    {
+      "customType": "regex",
+      "description": "Surface OpenSSF Scorecard release bumps for the pinned binary in scorecard.yml. Renovate bumps SCORECARD_VERSION; refresh SCORECARD_SHA256 from the new release (the sha256 check fails closed until you do).",
+      "managerFilePatterns": ["/^\\.github/workflows/scorecard\\.yml$/"],
+      "matchStrings": ["SCORECARD_VERSION:\\s*(?<currentValue>\\S+)"],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "ossf/scorecard",
+      "extractVersionTemplate": "^v(?<version>.+)$"
     }
   ]
 }

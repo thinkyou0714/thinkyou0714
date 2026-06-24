@@ -11,6 +11,7 @@ What runs in CI, why, and how to work within this repo's constraints. Companion 
 | [`secrets-scan`](../.github/workflows/secrets-scan.yml) | PR, push, dispatch | gitleaks secret scan | `contents: read` |
 | [`dependency-review`](../.github/workflows/dependency-review.yml) | PR | flags vulnerable/newly-added deps | `contents: read` |
 | [`codeql`](../.github/workflows/codeql.yml) | PR, push, weekly, dispatch | CodeQL static analysis of the Python (**`security-extended`** suite) | `contents: read` + `security-events: write` |
+| [`scorecard`](../.github/workflows/scorecard.yml) | weekly, push `main`, dispatch | OpenSSF Scorecard supply-chain analysis (pinned binary → SARIF to the Security tab); default branch only, never on PRs | `contents: read` + `security-events: write` |
 | [`metrics`](../.github/workflows/metrics.yml) | daily cron, `workflow_dispatch`, push to `main` | regenerate & commit `github-metrics.svg` | job: `contents: write` |
 
 All declare explicit `permissions:`, `concurrency:`, and `timeout-minutes:`. Read-only
@@ -28,15 +29,22 @@ To add a new tool:
 
 1. **GitHub-authored** (`actions/`, `github/`) → use it directly, SHA-pinned (e.g. CodeQL).
 2. **Allow-listed marketplace action** → use it, SHA-pinned.
-3. **Anything else** (e.g. `actionlint`, `ruff`, `zizmor`) → **do not** add it as `uses:`.
-   Download the pinned, checksum-verified release binary in a `run:` step instead — see the
-   `actionlint` and `ruff` steps in [`lint.yml`](../.github/workflows/lint.yml) for the pattern.
+3. **Anything else** (e.g. `actionlint`, `ruff`, `scorecard`, `zizmor`) → **do not** add it as
+   `uses:`. Download the pinned, checksum-verified release binary in a `run:` step instead — see
+   the `actionlint`/`ruff` steps in [`lint.yml`](../.github/workflows/lint.yml) and the
+   [`scorecard`](../.github/workflows/scorecard.yml) workflow for the pattern (it still uploads
+   SARIF via the allow-listed `github/codeql-action`).
 
 Pin third-party `uses:` to a commit SHA with a `# vX.Y` comment; Renovate keeps digests current
 (`helpers:pinGitHubActionDigests`). The pinned **binaries** (`actionlint`, `ruff`) are
 version+SHA256 in `lint.yml`: a Renovate `customManager` (see [`renovate.json`](../renovate.json))
 surfaces version bumps, and you refresh the matching `*_SHA256` from the release checksums — the
 lint job's `sha256sum -c` fails closed until you do, which is the safe outcome.
+
+**Why these versions.** The pinned binaries track latest-stable at adoption time — `actionlint`
+1.7.12, `ruff` 0.15.19, `scorecard` 5.5.0 (its SHA256 is computed from the canonical release
+tarball, as OpenSSF doesn't publish a sidecar checksums file). Bump deliberately when Renovate
+proposes it and re-verify the checksum from the new release; never float to `@latest`.
 
 ## Reproduce CI locally
 

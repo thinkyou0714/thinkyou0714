@@ -63,6 +63,11 @@ jobs:
           plugin_achievements_display: compact
           plugin_achievements_limit: 0
 
+          plugin_habits: yes
+          plugin_habits_from: 200
+          plugin_habits_days: 14
+          plugin_habits_charts: yes
+
           commits_authoring: thinkyou0714, ${{ github.repository_owner }}
 
           config_padding: 0, 0 + 1.8em

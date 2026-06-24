@@ -1,0 +1,57 @@
+name: scorecard
+
+# OpenSSF Scorecard supply-chain analysis. The ossf/scorecard-action is NOT on the
+# org Actions allow-list, so we run the pinned, checksum-verified CLI binary in a
+# run: step (same pattern as actionlint/ruff) and upload SARIF via the allow-listed
+# github/codeql-action. Runs on the default branch only (schedule / push / dispatch) —
+# never on pull_request, so it can't gate a PR. Results land in the Security tab.
+on:
+  schedule:
+    - cron: '41 2 * * 2' # weekly, Tuesday 02:41 UTC
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read # checkout
+      security-events: write # upload SARIF to the Security tab
+      actions: read # some checks read workflow-run metadata
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      # SHA256 computed from the canonical v5.5.0 release download; Renovate's
+      # customManager surfaces version bumps (refresh the SHA from the new release).
+      - name: Run Scorecard (pinned binary)
+        env:
+          SCORECARD_VERSION: 5.5.0
+          SCORECARD_SHA256: 83b90a05c1540ef1390db1cd5711e5fd04be9c1d8537fb84d39d02092d6a8dff
+          SCORECARD_REPO: ${{ github.repository }}
+          GITHUB_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          url="https://github.com/ossf/scorecard/releases/download/v${SCORECARD_VERSION}/scorecard_${SCORECARD_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL "$url" -o /tmp/scorecard.tgz
+          echo "${SCORECARD_SHA256}  /tmp/scorecard.tgz" | sha256sum -c -
+          tar -xzf /tmp/scorecard.tgz -C /tmp scorecard
+          /tmp/scorecard --repo="github.com/${SCORECARD_REPO}" \
+            --format=sarif --show-details --output=/tmp/results.sarif
+
+      - name: Upload SARIF to the Security tab
+        uses: github/codeql-action/upload-sarif@dd903d2e4f5405488e5ef1422510ee31c8b32357 # v3
+        with:
+          sarif_file: /tmp/results.sarif
+          category: scorecard

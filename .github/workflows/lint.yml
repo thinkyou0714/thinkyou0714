@@ -47,25 +47,41 @@ jobs:
           esac
           echo "hook exits 0 for all SessionStart sources (incl. AGMSG_DEBUG=1)"
 
-      - name: Validate JSON (.claude/settings.json)
-        run: python3 -m json.tool .claude/settings.json > /dev/null
+      - name: Validate JSON configs
+        run: |
+          python3 - <<'PY'
+          import glob, json, sys
+          bad = 0
+          files = sorted(set(glob.glob(".claude/**/*.json", recursive=True) + ["renovate.json"]))
+          for f in files:
+              try:
+                  with open(f) as fh:
+                      json.load(fh)
+              except (OSError, json.JSONDecodeError) as e:
+                  print(f"::error file={f}::{e}")
+                  bad += 1
+          print(f"validated {len(files)} JSON config(s)")
+          sys.exit(1 if bad else 0)
+          PY
 
       - name: Validate .claude/settings.json structure + hook paths
         run: python3 .github/scripts/check_claude_settings.py
 
-      - name: Validate workflow YAML
+      - name: Validate YAML configs
         run: |
           python3 -c "import yaml" 2>/dev/null || python3 -m pip install --quiet -r .github/requirements-ci.txt
           python3 - <<'PY'
           import glob, sys, yaml
           bad = 0
-          for f in sorted(glob.glob(".github/workflows/*.yml")):
+          files = sorted(glob.glob(".github/**/*.yml", recursive=True))
+          for f in files:
               try:
                   with open(f) as fh:
                       yaml.safe_load(fh)
               except yaml.YAMLError as e:
                   print(f"::error file={f}::{e}")
                   bad += 1
+          print(f"validated {len(files)} YAML config(s)")
           sys.exit(1 if bad else 0)
           PY
 
