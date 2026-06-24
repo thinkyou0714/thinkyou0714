@@ -35,6 +35,11 @@ export * from "./errors.ts";
 export { BudgetGuard } from "./budget.ts";
 export type { BudgetOptions } from "./budget.ts";
 
+export { MemoryCache, cacheKeyFor } from "./cache.ts";
+export type { RequestCache, MemoryCacheOptions, CacheStats } from "./cache.ts";
+
+export { WorkPool, SingleFlight } from "./pool.ts";
+
 export { chooseModel } from "./routing.ts";
 export type { FuguModel, RouteTask, RouteInput, RoutingPolicy } from "./routing.ts";
 

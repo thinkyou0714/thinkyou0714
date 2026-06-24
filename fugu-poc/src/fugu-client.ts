@@ -39,6 +39,8 @@ import {
   extractStreamFinishReason,
 } from "./stream.ts";
 import type { BudgetGuard } from "./budget.ts";
+import { cacheKeyFor } from "./cache.ts";
+import type { RequestCache } from "./cache.ts";
 import { mapToolsForResponses, mapToolsForChat, parseToolCalls } from "./tools.ts";
 import type { FuguTool, ToolChoice } from "./tools.ts";
 import { parseJsonLoose } from "./json.ts";
@@ -66,6 +68,8 @@ export interface FuguClientOptions extends FuguConfig {
   maxInputChars?: number;
   /** Optional spend guard; throws FuguBudgetError once the limit would be exceeded. */
   budget?: BudgetGuard;
+  /** Optional response cache; identical requests are served without a network call. */
+  cache?: RequestCache;
   /** Called before each network attempt (incl. retries) — metadata only, no content. */
   onRequest?: (event: RequestEvent) => void;
   /** Called after a result is built — metadata only (model, status, tokens, cost). */
@@ -103,6 +107,8 @@ export interface GenerateOptions {
   store?: boolean;
   /** Extra body params merged into the request (e.g. { temperature: 0.2 }). */
   params?: Record<string, unknown>;
+  /** Set false to bypass the client's response cache for this call. */
+  cache?: boolean;
 }
 
 export type ChatRole = "system" | "developer" | "user" | "assistant";
@@ -136,6 +142,7 @@ export class FuguClient {
   private readonly maxOutputTokens?: number;
   private readonly maxInputChars: number;
   private readonly budget?: BudgetGuard;
+  private readonly cache?: RequestCache;
   private readonly onRequest?: (event: RequestEvent) => void;
   private readonly onResponse?: (event: ResponseEvent) => void;
   private readonly logger: Logger;
@@ -155,6 +162,7 @@ export class FuguClient {
     this.maxOutputTokens = options.maxOutputTokens;
     this.maxInputChars = options.maxInputChars ?? 4_000_000;
     this.budget = options.budget;
+    this.cache = options.cache;
     this.onRequest = options.onRequest;
     this.onResponse = options.onResponse;
     this.logger = options.logger ?? noopLogger;
@@ -176,10 +184,28 @@ export class FuguClient {
     if (opts.previousResponseId) body.previous_response_id = opts.previousResponseId;
     if (opts.store !== undefined) body.store = opts.store;
     this.applyOutputCap(body, "max_output_tokens", opts);
+    const cacheKey = this.cacheKey("/responses", body, opts);
+    if (cacheKey) {
+      const hit = await this.cache?.get(cacheKey);
+      if (hit) {
+        const cached = { ...hit, cached: true };
+        this.emitResponse("/responses", model, cached, Date.now() - start);
+        return cached;
+      }
+    }
     const { json, requestId } = await this.request("/responses", body, model, opts);
     const result = this.buildResult(json, model, extractResponsesText(json), requestId, opts);
+    if (cacheKey) await this.cache?.set(cacheKey, result);
     this.emitResponse("/responses", model, result, Date.now() - start);
     return result;
+  }
+
+  /** A stable cache key for this request, or undefined when the call isn't cacheable. */
+  private cacheKey(endpoint: string, body: Record<string, unknown>, opts: GenerateOptions): string | undefined {
+    if (!this.cache || opts.cache === false) return undefined;
+    // Never cache tool calls (side effects) or server-side stateful chaining.
+    if (opts.tools || opts.previousResponseId || opts.store) return undefined;
+    return cacheKeyFor(endpoint, body);
   }
 
   /** Chat Completions API. */
@@ -192,8 +218,18 @@ export class FuguClient {
     if (opts.tools) body.tools = mapToolsForChat(opts.tools);
     if (opts.toolChoice) body.tool_choice = opts.toolChoice;
     this.applyOutputCap(body, "max_completion_tokens", opts);
+    const cacheKey = this.cacheKey("/chat/completions", body, opts);
+    if (cacheKey) {
+      const hit = await this.cache?.get(cacheKey);
+      if (hit) {
+        const cached = { ...hit, cached: true };
+        this.emitResponse("/chat/completions", model, cached, Date.now() - start);
+        return cached;
+      }
+    }
     const { json, requestId } = await this.request("/chat/completions", body, model, opts);
     const result = this.buildResult(json, model, extractChatText(json), requestId, opts);
+    if (cacheKey) await this.cache?.set(cacheKey, result);
     this.emitResponse("/chat/completions", model, result, Date.now() - start);
     return result;
   }

@@ -53,6 +53,8 @@ export interface FuguResult {
   requestId?: string;
   /** Parsed tool/function calls the model requested, if any. */
   toolCalls?: FuguToolCall[];
+  /** True when this result was served from a RequestCache (no network call was made). */
+  cached?: boolean;
 }
 
 function getProp(obj: unknown, key: string): unknown {
