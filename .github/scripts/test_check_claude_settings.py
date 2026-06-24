@@ -19,7 +19,9 @@ class TestValidate(unittest.TestCase):
         self.hook = os.path.join(self.dir, "hook.sh")
         with open(self.hook, "w", encoding="utf-8") as f:
             f.write("#!/usr/bin/env bash\nexit 0\n")
-        os.chmod(self.hook, 0o755)
+        # Owner-only rwx (0o700) — the executability check reads the owner bit; no need
+        # for a world-readable mask (which CodeQL flags as overly permissive).
+        os.chmod(self.hook, 0o700)
         self.addCleanup(self._cleanup)
 
     def _cleanup(self):
@@ -51,7 +53,7 @@ class TestValidate(unittest.TestCase):
         self.assertTrue(any("not found" in e for e in errs))
 
     def test_non_executable_script_flagged(self):
-        os.chmod(self.hook, 0o644)
+        os.chmod(self.hook, 0o600)  # owner rw, no execute bit → flagged "not executable"
         errs = c.validate(self._settings(), self.dir)
         self.assertTrue(any("not executable" in e for e in errs))
 

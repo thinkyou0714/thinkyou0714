@@ -336,7 +336,7 @@ Cumulative catalog: **272 ideas**.
 205. **[done]** `check_catalog.py` — asserts this catalog's items are **contiguous 1..N** with a recognized `[tag]`; unit-tested, wired into `lint` (it validates this very list).
 206. **[done]** Link-checker now flags **images missing alt text** (`![](x)`), extending the accessibility guarantee; unit-tested.
 207. **[done]** The new tests run under the existing `unittest discover` step (27 tests total) and the new scripts pass `ruff`.
-208. **[assessed]** Cross-file `file.md#anchor` validation was a research candidate but is **already implemented** in `check_md_links.py` (lines 83–88) — verified, dropped.
+208. **[assessed]** Cross-file `file.md#anchor` validation was a research candidate but is **already implemented** in `check_md_links.py` (the cross-file `dest` + `anchors_for(dest)` check) — verified, dropped.
 209. **[roadmap]** `markdownlint` (pinned binary) — style is already consistent; marginal ROI vs. added CI surface.
 210. **[roadmap]** `cspell`/`typos` spell-check with a CJK-aware ignore list — deferred (false-positive tuning cost on JP text).
 211. **[roadmap]** `shfmt --diff` on the hook — shellcheck already gates correctness; formatting is stable.
