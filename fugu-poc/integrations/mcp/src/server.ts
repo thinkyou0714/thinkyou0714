@@ -8,11 +8,18 @@ import { z } from "zod";
 import type { FuguClient } from "../../../src/index.ts";
 import { fuguRespond, fuguChat, fuguListModels } from "./handlers.ts";
 
-const MODEL_ENUM = z.enum(["fugu", "fugu-ultra"]);
+// `effort` is a closed set in the core (`ReasoningEffort`), so an enum is correct here.
 const EFFORT_ENUM = z.enum(["high", "xhigh", "max"]);
 
 export function createFuguMcpServer(client: FuguClient, models: string[] = ["fugu", "fugu-ultra"]): McpServer {
   const server = new McpServer({ name: "fugu", version: "0.1.0" });
+
+  // The core treats `model` as a free string (new/aliased ids stay valid), so accept any
+  // string and just document the known ids rather than hard-rejecting at the schema layer.
+  const modelField = z
+    .string()
+    .optional()
+    .describe(`Fugu model id (defaults to the server's configured model). Known: ${models.join(", ")}.`);
 
   server.registerTool(
     "fugu_respond",
@@ -21,7 +28,7 @@ export function createFuguMcpServer(client: FuguClient, models: string[] = ["fug
       description:
         "Ask Sakana Fugu (Responses API) — a single endpoint that orchestrates a pool of frontier models. " +
         "Use for hard reasoning, adversarial review, or a second opinion. `fugu` is fast; `fugu-ultra` is max quality.",
-      inputSchema: { input: z.string(), model: MODEL_ENUM.optional(), effort: EFFORT_ENUM.optional() },
+      inputSchema: { input: z.string(), model: modelField, effort: EFFORT_ENUM.optional() },
     },
     async (args) => fuguRespond(client, args),
   );
@@ -33,7 +40,7 @@ export function createFuguMcpServer(client: FuguClient, models: string[] = ["fug
       description: "Multi-turn chat with Fugu (Chat Completions API).",
       inputSchema: {
         messages: z.array(z.object({ role: z.enum(["system", "developer", "user", "assistant"]), content: z.string() })),
-        model: MODEL_ENUM.optional(),
+        model: modelField,
       },
     },
     async (args) => fuguChat(client, args),
