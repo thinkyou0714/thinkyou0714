@@ -42,6 +42,7 @@ jobs:
           SCORECARD_SHA256: 83b90a05c1540ef1390db1cd5711e5fd04be9c1d8537fb84d39d02092d6a8dff
           SCORECARD_REPO: ${{ github.repository }}
           GITHUB_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ENABLE_SARIF: 1 # v5.x gates --format=sarif behind this (the official action sets it internally)
         run: |
           url="https://github.com/ossf/scorecard/releases/download/v${SCORECARD_VERSION}/scorecard_${SCORECARD_VERSION}_linux_amd64.tar.gz"
           curl -fsSL "$url" -o /tmp/scorecard.tgz
