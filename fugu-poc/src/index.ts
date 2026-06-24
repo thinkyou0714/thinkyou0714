@@ -62,6 +62,23 @@ export type {
   LlmGraderOptions,
 } from "./evals.ts";
 
+export {
+  compareSystems,
+  headToHead,
+  llmPairwiseJudge,
+  parseGoldenSet,
+  formatComparison,
+} from "./eval-compare.ts";
+export type {
+  EvalSystem,
+  SystemSummary,
+  ComparisonReport,
+  CompareOptions,
+  PairwiseJudge,
+  PairwiseVerdict,
+  Head2HeadResult,
+} from "./eval-compare.ts";
+
 export { chooseModel } from "./routing.ts";
 export type { FuguModel, RouteTask, RouteInput, RoutingPolicy } from "./routing.ts";
 
