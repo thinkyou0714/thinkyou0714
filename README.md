@@ -8,6 +8,7 @@ I run [**THINK YOU LAB**](https://github.com/thinkyou0714/lab-public) — a one-
 
 ## Currently working on
 
+- 🔗 **agmsg adoption** — wiring [`fujibee/agmsg`](https://github.com/fujibee/agmsg) in as the Claude Code × Codex coordination layer ([how this repo uses it](docs/agmsg.md))
 - 🧰 [`ccmux`](https://github.com/thinkyou0714/ccmux) — Claude Code multiplexer (Zellij × git worktree × Obsidian)
 - 📝 [`github-flow-kit`](https://github.com/thinkyou0714/github-flow-kit) — 4 Claude Code skills for GitHub-native devs (pr-respond, release-notes, issue-triage, repo-tour)
 - 🌐 [`public-docs`](https://github.com/thinkyou0714/public-docs) — Next.js + MDX template implementation guides
@@ -17,7 +18,7 @@ I run [**THINK YOU LAB**](https://github.com/thinkyou0714/lab-public) — a one-
 
 | Layer | Tools |
 |---|---|
-| AI Coding | Claude Code · Codex · Cursor (CLAUDE.md + AGENTS.md canonical) |
+| AI Coding | Claude Code · Codex · Cursor (CLAUDE.md + AGENTS.md canonical) · [agmsg](https://github.com/fujibee/agmsg) cross-agent messaging |
 | Automation | n8n (200+ WF) · autoclaw (Claude proxy) · Slack bot infra |
 | Knowledge | Obsidian Local REST API + Supabase pgvector + Ollama embeddings |
 | Stack | Next.js 16 · Supabase · Stripe · Vercel · Docker |

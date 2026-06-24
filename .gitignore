@@ -1,0 +1,27 @@
+# --- Claude Code / agent local overrides (never commit) ---
+# Personal, machine-specific settings and secrets live here, not in settings.json.
+.claude/settings.local.json
+.claude/*.local.json
+
+# --- agmsg local state (the SQLite message store is local + may contain context) ---
+# agmsg installs to ~/.agents (outside the repo); these guard any repo-local fallback
+# (e.g. AGMSG_STORAGE_PATH=./.agmsg) so a message DB is never committed.
+.agmsg/
+*.agmsg.db
+messages.db
+*.db-wal
+*.db-shm
+.agmsg-backups/
+
+# --- Secrets ---
+.env
+.env.*
+!.env.example
+
+# --- OS / editor cruft ---
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/
