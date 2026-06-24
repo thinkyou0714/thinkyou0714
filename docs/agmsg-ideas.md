@@ -79,7 +79,7 @@ multi-agent governance. Each item is tagged:
 51. **[done]** Recommend **`both`** for an active Claude↔Codex pair (real-time + safety net).
 52. **[done]** Recommend **`turn`** when the Stop-hook "error:" label is distracting.
 53. **[done]** Recommend **`monitor`** for solo Claude Code.
-54. **[done]** Document the cosmetic upstream **"error:" label** quirk so it isn't mistaken for a fault.
+54. **[done]** Document the informational Stop-hook output that Claude Code can prefix with **"error:"** so it isn't mistaken for a fault.
 55. **[rec]** Tune monitor poll interval to taste (responsiveness vs. resource use).
 56. **[rec]** On Codex, default to `turn`; treat `monitor` as beta (needs `~/.agents/bin` early on PATH).
 57. **[roadmap]** Supervisor/heartbeat to restart a vanished monitor task — prefer `both`/`turn` fallback instead.

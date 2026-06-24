@@ -94,17 +94,23 @@ fi
 if [ "${AGMSG_AUTO_BOOTSTRAP:-0}" = "1" ] && [ -x "$SKILL_DIR/scripts/join.sh" ]; then
   already=0
   if [ -x "$SKILL_DIR/scripts/whoami.sh" ]; then
-    "$SKILL_DIR/scripts/whoami.sh" "$PROJECT_DIR" claude-code 2>/dev/null \
-      | grep -q "$TEAM" && already=1
+    # whoami prints "not_joined=true available_teams=..." when unjoined, else
+    # "agent=... teams=...". Match not_joined FIRST so a team name that appears in
+    # available_teams= can't be mistaken for an existing membership.
+    case "$("$SKILL_DIR/scripts/whoami.sh" "$PROJECT_DIR" claude-code 2>/dev/null || true)" in
+      *not_joined=true*) already=0 ;;
+      *teams=*)          already=1 ;;
+    esac
   fi
   if [ "$already" -eq 0 ]; then
-    if "$SKILL_DIR/scripts/join.sh" "$TEAM" "$AGENT" claude-code >/dev/null 2>&1; then
+    # join.sh requires <team> <agent_id> <type> <project_path> — all 4 mandatory.
+    if "$SKILL_DIR/scripts/join.sh" "$TEAM" "$AGENT" claude-code "$PROJECT_DIR" >/dev/null 2>&1; then
       say "auto-joined team '$TEAM' as '$AGENT' (v$VERSION). Check inbox with /agmsg."
     else
       say "ready (v$VERSION). Auto-join skipped (run /agmsg to join team '$TEAM' as '$AGENT')."
     fi
   else
-    say "ready (v$VERSION). Already a member of team '$TEAM'. Check inbox with /agmsg."
+    say "ready (v$VERSION). Already in a team for this project. Check inbox with /agmsg."
   fi
 else
   say "ready (v$VERSION). Run /agmsg to join team '$TEAM' as '$AGENT' (set AGMSG_AUTO_BOOTSTRAP=1 to auto-join)."

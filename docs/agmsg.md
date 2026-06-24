@@ -64,10 +64,10 @@ Tunables (env): `AGMSG_TEAM` (default repo name), `AGMSG_AGENT` (default `claude
 
 Switch with `/agmsg mode <name>` (Claude) or `$agmsg mode <name>` (Codex).
 
-**Recommendation:** `both` while actively pairing. If Claude Code shows agmsg's Stop-hook
-output with a misleading **"error:"** label (it's informational, not an error — an upstream
-UI quirk), switch to `turn` for a quieter loop. Fresh sessions need one priming message
-("hi") before monitor reacts.
+**Recommendation:** `both` while actively pairing. If Claude Code surfaces agmsg's Stop-hook
+output with a misleading **"error:"** prefix (it's informational — not an actual error),
+switch to `turn` for a quieter loop. Fresh sessions need one priming message ("hi") before
+monitor reacts.
 
 ---
 
@@ -136,9 +136,9 @@ silent past the budget, time out and ask the human rather than re-pinging foreve
 |---|---|
 | Hook says "sqlite3 missing" | Install sqlite3, restart the agent, run `/agmsg`. |
 | `/agmsg` not found | Reinstall (§1) and restart; or run the `agmsg-onboard` skill. |
-| Duplicate/"phantom" registrations | You ran agmsg from a subdirectory — run from the **repo root**; `/agmsg reset` to clear this project's registration. |
+| Duplicate/"phantom" registrations | Often from running agmsg in a subdirectory — run from the **repo root**; `/agmsg reset` clears this project's registration. |
 | Monitor task vanished mid-session | Switch to `/agmsg mode turn` (or `both`); re-prime with a short message. |
-| Stop-hook output labelled "error:" | Cosmetic upstream quirk; use `mode turn` if it bothers you. |
+| Stop-hook output labelled "error:" | Cosmetic only (informational, not a real error); use `mode turn` if it bothers you. |
 | Codex can't write the DB | Add `writable_roots` to `~/.codex/config.toml` (see `AGENTS.md`). |
 
 ---
