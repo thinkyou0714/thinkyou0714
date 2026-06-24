@@ -34,7 +34,8 @@ def anchors_for(path: str) -> set[str]:
     seen: dict[str, int] = {}
     out: set[str] = set()
     try:
-        lines = open(path, encoding="utf-8").read().splitlines()
+        with open(path, encoding="utf-8") as fh:
+            lines = fh.read().splitlines()
     except OSError:
         return out
     in_fence = False
@@ -63,7 +64,9 @@ def main() -> int:
     errors: list[str] = []
     for md in sorted(md_files):
         base_dir = os.path.dirname(md)
-        for raw in LINK.findall(open(md, encoding="utf-8").read()):
+        with open(md, encoding="utf-8") as fh:
+            text = fh.read()
+        for raw in LINK.findall(text):
             target = raw.strip()
             if target.startswith("<") and ">" in target:
                 target = target[1 : target.index(">")]

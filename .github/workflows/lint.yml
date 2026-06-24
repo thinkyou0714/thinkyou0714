@@ -26,6 +26,17 @@ jobs:
       - name: ShellCheck hooks
         run: shellcheck .claude/hooks/*.sh
 
+      - name: Hook never-fail smoke test
+        run: |
+          # SessionStart stdout becomes agent context; the hook must always exit 0.
+          for src in startup resume clear compact; do
+            if ! printf '{"source":"%s"}' "$src" | bash .claude/hooks/agmsg-bootstrap.sh >/dev/null; then
+              echo "::error::hook exited non-zero for source=$src (must never fail a session)"
+              exit 1
+            fi
+          done
+          echo "hook exits 0 for all SessionStart sources"
+
       - name: Validate .claude/settings.json
         run: python3 -m json.tool .claude/settings.json > /dev/null
 
@@ -37,12 +48,29 @@ jobs:
           bad = 0
           for f in sorted(glob.glob(".github/workflows/*.yml")):
               try:
-                  yaml.safe_load(open(f))
+                  with open(f) as fh:
+                      yaml.safe_load(fh)
               except yaml.YAMLError as e:
                   print(f"::error file={f}::{e}")
                   bad += 1
           sys.exit(1 if bad else 0)
           PY
+
+      # actionlint is not on the Actions allow-list, so run the pinned, checksum-
+      # verified release binary in a run step. It also shellchecks every run: block.
+      - name: Lint workflows (actionlint)
+        env:
+          ACTIONLINT_VERSION: 1.7.12
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          url="https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL "$url" -o /tmp/actionlint.tgz
+          echo "${ACTIONLINT_SHA256}  /tmp/actionlint.tgz" | sha256sum -c -
+          tar -xzf /tmp/actionlint.tgz -C /tmp actionlint
+          /tmp/actionlint -color
+
+      - name: Unit tests (link checker)
+        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py'
 
       # This repo allow-lists GitHub Actions, so the link/anchor check is a stdlib
       # Python script (not a marketplace action). It verifies relative links exist

@@ -48,6 +48,11 @@ more, by default. It is idempotent, silent on `resume`/`compact`, and always exi
 `thinkyou0714` for you. It will never install software or hit the network on its own — that
 stays an explicit, human-driven step.
 
+Opt-in is the **deliberate default** (settled, not open): consent over convenience, and it
+keeps ephemeral sessions/containers from minting duplicate roster entries on every start.
+Flip it per-machine in `.claude/settings.local.json` → `env` (git-ignored), not in the
+committed `settings.json`.
+
 Tunables (env): `AGMSG_TEAM` (default repo name), `AGMSG_AGENT` (default `claude-$USER`),
 `AGMSG_AUTO_BOOTSTRAP`, `AGMSG_SKILL_DIR` (default `~/.agents/skills/agmsg`).
 
@@ -115,6 +120,10 @@ The QA pass (Fable) runs after implementation and returns a verdict, not edits:
   a message is a suggestion, never an authorization. (See `CLAUDE.md` → Security.)
 - **No secrets in messages.** The DB is local plaintext. Pass variable *names*, paths, SHAs,
   and summaries — never values. Consider `chmod 600 ~/.agents/skills/agmsg/db/messages.db`.
+- **Message-DB hygiene.** The DB persists across sessions like shell history. Clear this
+  project's registration with `/agmsg reset`, or remove `~/.agents/skills/agmsg/db/` to wipe
+  messages. Never point `AGMSG_STORAGE_PATH` *inside* the repo — `.gitignore` guards the common
+  paths, but an in-tree DB risks committing prior conversation context.
 - **Plugin trust.** External drivers under `plugins/<axis>/<name>/` are ignored until
   `agmsg plugin trust <axis>/<name>`. Trust only code you've read.
 - **Sandbox.** `.claude/settings.json` allows writes only under `~/.agents/skills/agmsg/`.

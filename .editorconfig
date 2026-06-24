@@ -10,6 +10,10 @@ trim_trailing_whitespace = true
 indent_style = space
 indent_size = 2
 
+[*.py]
+indent_style = space
+indent_size = 4
+
 # Markdown uses trailing spaces for hard line breaks — don't strip them.
 [*.md]
 trim_trailing_whitespace = false

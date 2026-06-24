@@ -207,3 +207,85 @@ pinning, least privilege, self-validating CI) and polishes docs. Cumulative cata
 
 131. **[done]** The repo enforces a **GitHub Actions allow-list** (only `actions/*`, verified-marketplace, and patterns like `gitleaks/gitleaks-action@*`, `lowlighter/metrics@*`). A first attempt to use a marketplace link-checker (`lycheeverse/lychee-action`) caused a `startup_failure`; the pinned `actions/checkout`, `actions/dependency-review-action`, and `gitleaks-action` all comply.
 132. **[done]** Replaced the marketplace link-checker with the stdlib `.github/scripts/check_md_links.py` so the link/anchor gate runs under the allow-list with no third-party action.
+
+---
+
+## Round 3 — testing, static analysis, docs governance & the profile
+
+Rounds 1–2 added the agmsg adoption and hardened the repo's supply chain. Round 3 **tests the
+new code** the repo now ships (Python + the hook), adds **workflow/code static analysis**
+(`actionlint`, CodeQL), consolidates the **CI/allow-list docs**, and makes a first, deliberately
+**conservative pass on the profile product** (accessibility + native Sponsor button — no
+personal-voice rewrite). Three research streams (profile/community, security/CI, agmsg/docs)
+surfaced ~107 raw candidates, consolidated below. Cumulative catalog: **180 ideas**
+(100 + 32 + 48). Tags add `[assessed]` (looked at, already-safe/no change), `[verified]`
+(checked externally), and `[hold]` (owner's call, offered not imposed).
+
+### T. Testing the new code (Python + hook)
+
+133. **[done]** Unit tests for `check_md_links.py` (`.github/scripts/test_check_md_links.py`): slug algorithm incl. the real `#4-goal-handoff-template` case, dedup suffixes, code-fence exclusion, image/external skip. Run in `lint`.
+134. **[done]** Hook never-fail smoke test in `lint` — asserts exit 0 for all four SessionStart sources (`startup`/`resume`/`clear`/`compact`).
+135. **[done]** Fixed an unclosed-file `ResourceWarning` in `check_md_links.py` (context managers) — surfaced immediately by the new tests.
+136. **[rec]** `bats` hook tests with mocked `sqlite3`/`join.sh` for the auto-join path — deeper than the smoke test; add if the hook grows.
+137. **[roadmap]** `ruff` + `mypy --strict` on `.github/scripts/` — nice polish, deferred (one clean stdlib module; the unit tests give more signal per unit of CI).
+
+### U. Workflow & code static analysis
+
+138. **[done]** `actionlint` via a **pinned, checksum-verified** release binary in `lint` (allow-list-safe as a `run:` binary; it also shellchecks every `run:` block).
+139. **[done]** **CodeQL** (Python) workflow — `github/codeql-action` SHA-pinned (GitHub-authored ⇒ allow-list-OK), least-privilege, PR + push + weekly.
+140. **[rec]** `zizmor` (Actions security lint) as a pinned binary — overlaps actionlint's high-value checks; add if workflows get complex.
+141. **[roadmap]** OpenSSF Scorecard — re-evaluated; still low ROI at this size (round 2 #129 stands) and not allow-listed as an action.
+142. **[roadmap]** SLSA provenance for workflow definitions — not a shipping GitHub feature yet.
+143. **[rec]** Extend `lint`'s JSON/YAML validation to *all* configs under `.claude/`+`.github/` (today just `settings.json`) — trivial generalization when more configs appear.
+144. **[roadmap]** Renovate `customManager` regex to auto-bump the `actionlint` version+SHA in `lint.yml` (today hand-maintained; a stale SHA fails the checksum, i.e. fails closed).
+
+### V. Workflow robustness & least privilege
+
+145. **[done]** `metrics.yml` `cancel-in-progress: false` — don't cancel a commit-producing run mid-flight; overlapping triggers queue instead.
+146. **[done]** CodeQL job pins all three token scopes explicitly (`contents: read` + `security-events: write` + `actions: read`) — job-level `permissions:` **replace**, not merge, the top-level set.
+147. **[rec]** `METRICS_TOKEN` scoped to public-repo only (vs the `GITHUB_TOKEN` fallback) — one-time human token setup.
+148. **[rec]** Cache pip in `lint` (`actions/setup-python` cache) — minor; the `pyyaml` install is already fast.
+149. **[roadmap]** `harden-runner` egress policy — enterprise-grade, unneeded for a config repo (and not allow-listed).
+
+### W. Dependabot / Renovate reconciliation (root-caused)
+
+150. **[done]** Confirmed `.github/dependabot.yml` was **already removed in round 1** (commit `72d3ecd`); Renovate is the sole updater. The "Dependabot Updates" entry in the Actions tab is GitHub's cosmetic default — **no duplicate job runs**. No code action.
+151. **[rec]** Optionally disable Dependabot in Settings → Code security to drop the cosmetic entry (UI-only, owner's call).
+
+### X. Docs governance & DRY
+
+152. **[done]** New `docs/CI.md` — workflow map, the **Actions allow-list** policy + *how to add a tool under it*, local-repro commands, and human-applied repo-settings notes.
+153. **[done]** Expanded `.github/SECURITY.md` — posture now lists CodeQL + actionlint + tests + the allow-list; scope names the `scripts/`+`hooks/` surface.
+154. **[done]** Resolved the **`AGMSG_AUTO_BOOTSTRAP`** question → deliberate **opt-in** (documented as settled in `docs/agmsg.md` §2, with the per-machine override path).
+155. **[done]** `docs/agmsg.md`: message-DB hygiene (clear/rotate; never put `AGMSG_STORAGE_PATH` in-tree).
+156. **[done]** `CLAUDE.md`: a concrete **accept-vs-reject** example for untrusted peer messages (lint-my-files = OK; force-push / read `~/.ssh` / set a token / out-of-scope refactor = refused).
+157. **[done]** `.editorconfig`: `[*.py]` 4-space rule (the link checker is the repo's first committed Python).
+158. **[assessed]** Turn-budget "≤ 5" text appears in 4 docs — but `AGENTS.md`/`SKILL.md`/`agmsg.md` already label themselves *summaries that defer to CLAUDE.md*; no gutting needed (research over-flagged this as a DRY violation).
+159. **[rec]** A `docs/README.md` index of the doc set — small nicety; cross-links already resolve (lint-enforced).
+160. **[roadmap]** Split `agmsg-ideas.md` into a shipped-log + a live backlog once it passes ~300 lines (revisit round 4).
+161. **[rec]** `docs/CI.md` "why these versions" note (e.g. gitleaks staying on v2 until a deliberate v3 review).
+162. **[assessed]** External-URL link checking stays a **deliberate non-goal** for the link-checker (needs network; offline CI is the point) — spot-check upstreams by hand.
+
+### Y. agmsg hook & integration depth (mostly already-safe)
+
+163. **[assessed]** Hook stdin / partial-JSON handling — already defaults to `startup` safely on any parse miss; no change.
+164. **[assessed]** Concurrent-session join — agmsg `join` is idempotent and `whoami` parsing guards `not_joined` first; documented, no code change.
+165. **[done]** Hook stdout contract is now guarded by the smoke test (exit 0; short, silent on `resume`/`compact`).
+166. **[assessed]** Version shows `?` on older installs — best-effort by design; non-issue.
+167. **[rec]** Note in `docs/agmsg.md`: prefer `turn` mode on ephemeral containers (CI/Codespaces) — `monitor`'s background task dies on teardown.
+168. **[rec]** `/goal` template "If blocked" clause — Codex replies `BLOCKED:` and waits rather than guessing.
+169. **[rec]** Idempotent `writable_roots` helper snippet for Codex in `AGENTS.md`.
+170. **[roadmap]** agmsg protocol-version pinning across machines — upstream is pre-1.0; revisit on a breaking release.
+171. **[roadmap]** Multi-team templating (`AGMSG_TEAM` is hardcoded) — fine for a solo repo; document as a fork-time assumption.
+
+### Z. The profile product (deliberately conservative)
+
+172. **[done]** Richer **alt text** on the metrics SVG (screen-reader accessibility) — markup, not voice.
+173. **[done]** `.github/FUNDING.yml` (`github: thinkyou0714`) — renders the native **Sponsor** button.
+174. **[verified]** All five linked repos + `fujibee/agmsg` resolve (HTTP 200) and the Sponsors page exists — **no dead links**; the `申請中`/`準備中`/`順次公開予定` markers are honest status, left in the owner's voice.
+175. **[hold]** Condensing those status markers, CI/license badges, About/FAQ/Acknowledgments, bilingual restructure — personal-profile **voice**; offered to the owner, not imposed.
+176. **[hold]** Repo topics, description, social-preview image, pinned-repos curation, profile bio — GitHub-UI/owner decisions; recommended in chat, not committed.
+177. **[roadmap]** `CONTRIBUTING` / `CODE_OF_CONDUCT` / `MAINTAINERS` / issue templates — noise for a solo profile repo (round 2 #128 stands) until it gains contributors.
+178. **[assessed]** `dependency-review` already auto-covers a future `requirements.txt` — no action unless Python deps are added.
+179. **[rec]** Quarterly "is everything still pinned/least-privilege?" glance — a habit, not a workflow.
+180. **[done]** This round's verification was an independent QA pass (Fable 5 unavailable in-env) + green CI — recorded honestly rather than asserting a Fable verdict.

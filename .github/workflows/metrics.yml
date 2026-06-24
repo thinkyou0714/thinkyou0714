@@ -12,7 +12,9 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # This job commits the SVG; let an in-flight run finish rather than cancel it
+  # mid-commit. Overlapping triggers queue instead of racing.
+  cancel-in-progress: false
 
 jobs:
   github-metrics:

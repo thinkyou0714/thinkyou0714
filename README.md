@@ -1,6 +1,6 @@
 # thinkyou0714
 
-![GitHub metrics](github-metrics.svg)
+![Auto-refreshed GitHub metrics for thinkyou0714 — most-used languages, commit activity, starred topics, and the contribution calendar](github-metrics.svg)
 
 > **Solo AI automation dev** — Building Claude Code × n8n × Obsidian tooling for JP/EN devs.
 
