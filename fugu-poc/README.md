@@ -25,7 +25,11 @@ to answer directly or to delegate to and synthesize a team of expert frontier mo
   classification.
 - **Streaming** (`respondStream` / `chatStream`) over SSE — zero-dep.
 - **Cost controls:** a `BudgetGuard` spend circuit-breaker, output-token + input-size
-  caps, and `chooseModel()` routing (`fugu` ↔ `fugu-ultra`).
+  caps, `chooseModel()` routing (`fugu` ↔ `fugu-ultra`), and an opt-in request **cache**
+  (`MemoryCache`, LRU+TTL) — identical calls skip the network *and* the budget charge.
+- **Strategy patterns:** a confidence-gated **`Cascade`** (cheap model → judge → escalate),
+  an **eval harness** (`runEval` + neutral `llmGrader`) to measure quality/cost/latency, and
+  concurrency primitives (`WorkPool` with priority lanes, `SingleFlight` de-dup) for bulk runs.
 - **Tool calling** (`tools` + `runTools` agentic loop, built-in `web_search`),
   **structured output** (`respondJson` with validate-and-repair), stateful
   **`Conversation`** chaining, and **observability hooks** (`onRequest` / `onResponse` /
@@ -113,6 +117,27 @@ const { data } = await client.respondJson<{ score: number }>("Rate this 1-10", {
 });
 ```
 
+### Cache, confidence cascade & evals
+
+```ts
+import { createClient, loadConfig, MemoryCache, Cascade, llmJudge, runEval, llmGrader } from "fugu-poc";
+
+// opt-in cache: identical requests are free (no network, no budget charge)
+const cache = new MemoryCache({ maxEntries: 1000, ttlMs: 60 * 60_000 });
+const client = createClient(loadConfig(), { cache });
+
+// confidence cascade: try fugu, escalate to fugu-ultra only when the judge isn't sure
+const cascade = new Cascade(client, {
+  stages: [{ model: "fugu" }, { model: "fugu-ultra", effort: "high" }],
+  judge: llmJudge(client, { threshold: 0.7 }), // or the zero-cost default `statusJudge`
+});
+const { result, stageIndex, escalations } = await cascade.run("A hard question…");
+
+// evals: measure quality/cost/latency over a golden set (neutral judge ≠ system under test)
+const report = await runEval(client, goldenSet, { grader: llmGrader(judgeClient), concurrency: 4 });
+console.log(report.passRate, report.totalCostUsd, report.avgLatencyMs);
+```
+
 ### Router + proxy (use Fugu from any OpenAI-SDK tool, with failover)
 
 ```ts
@@ -171,11 +196,15 @@ fugu-poc/
 │   ├── json.ts         # loose JSON extraction (structured output)
 │   ├── observe.ts      # logging / metrics hooks
 │   ├── conversation.ts # stateful Responses chaining
+│   ├── cache.ts        # request cache (MemoryCache LRU+TTL; RequestCache)
+│   ├── pool.ts         # WorkPool (bounded concurrency) + SingleFlight
+│   ├── cascade.ts      # confidence-gated model cascade + judges
+│   ├── evals.ts        # golden-set eval harness + graders
 │   ├── router.ts       # multi-provider failover (FuguRouter)
 │   ├── proxy.ts        # OpenAI-compatible proxy (bin: fugu-proxy)
 │   ├── cli.ts          # CLI (bin: fugu)
 │   └── openai.ts       # optional ./openai adapter
-├── test/               # fugu-client / timeout / p2 / p3 / p4 / mcp / obsidian tests
+├── test/               # client / timeout / p2-p5 / mcp / obsidian / strategy tests
 ├── integrations/
 │   ├── mcp/            # Fugu MCP server (own package; @modelcontextprotocol/sdk + zod)
 │   ├── obsidian/       # fugu-obsidian CLI (own package; zero-dep, Local REST API)

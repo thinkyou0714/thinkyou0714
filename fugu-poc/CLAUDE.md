@@ -38,5 +38,10 @@ Run `npm test`, `npm run typecheck`, and `npm run build` before declaring a chan
 ## Layout
 
 `src/`: `config.ts` · `errors.ts` · `redact.ts` · `types.ts` · `pricing.ts` ·
-`fugu-client.ts` · `cli.ts` · `openai.ts` (adapter) · `index.ts` (public barrel).
-`test/`: `fugu-client.test.ts` · `timeout.test.ts`.
+`fugu-client.ts` · `retry.ts` · `budget.ts` · `routing.ts` · `stream.ts` · `tools.ts` ·
+`json.ts` · `observe.ts` · `conversation.ts` · `cache.ts` · `pool.ts` · `cascade.ts` ·
+`evals.ts` · `router.ts` · `proxy.ts` · `cli.ts` · `openai.ts` (adapter) ·
+`index.ts` (public barrel).
+`test/`: `fugu-client` · `timeout` · `p2`–`p5` · `mcp` · `obsidian` · `strategy`.
+`integrations/`: `mcp/` · `obsidian/` · `n8n/` (each its own package). `.claude/` + `.cursor/`
+hold the `/fugu` skill + subagent.
