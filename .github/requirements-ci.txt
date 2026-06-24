@@ -1,0 +1,4 @@
+# Pinned CI-only Python dependencies. Renovate's pip-requirements manager tracks
+# and bumps these. Currently used by the "Validate workflow YAML" step in
+# .github/workflows/lint.yml (the rest of the CI Python is stdlib-only).
+pyyaml==6.0.2

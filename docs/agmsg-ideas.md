@@ -1,4 +1,4 @@
-# agmsg adoption — 100-idea deep-dive backlog
+# agmsg adoption — deep-dive backlog
 
 A deduplicated catalog distilled from a structured deep-dive into agmsg's design, its
 documented limitations, and current best practices for Claude Code hooks/skills and
@@ -289,3 +289,127 @@ surfaced ~107 raw candidates, consolidated below. Cumulative catalog: **180 idea
 178. **[assessed]** `dependency-review` already auto-covers a future `requirements.txt` — no action unless Python deps are added.
 179. **[rec]** Quarterly "is everything still pinned/least-privilege?" glance — a habit, not a workflow.
 180. **[done]** This round's verification was an independent QA pass (Fable 5 unavailable in-env) + green CI — recorded honestly rather than asserting a Fable verdict.
+
+---
+
+## Round 4 — best-practice depth, quality automation & a docs system
+
+Rounds 1–3 adopted agmsg, hardened the supply chain, and made the repo self-validating. Round 4
+**deepens the best-practice surface**: a second static analyzer (`ruff`) and broader CodeQL, two
+new stdlib CI validators (settings + catalog), opt-in hook debug logging, a documentation system
+(index + ADRs + changelog + runbook), and a light, solo-appropriate community-health layer. Three
+research streams produced **101 net-new candidates** (deduped vs. 1–180); the strong, allow-list-safe
+subset is shipped and the rest recorded — **92 catalogued** below. The constant constraint is the
+**Actions allow-list** (ADR 002): marketplace-action best practices are deferred unless run as a
+pinned binary. New tag: **[human-settings]** — a GitHub setting the owner applies, not committable.
+Cumulative catalog: **272 ideas**.
+
+### AA. CI / supply-chain hardening
+
+181. **[done]** Pin `pyyaml` via `.github/requirements-ci.txt` (`pyyaml==6.0.2`); `lint` installs `-r` it — reproducible, and Renovate's pip manager now tracks it.
+182. **[done]** Renovate `customManager` (regex) surfaces `actionlint` **and** `ruff` binary version bumps in `lint.yml` — closes #144; you refresh the matching `*_SHA256` (checksum fails closed until then).
+183. **[done]** `ruff` static analysis on `.github/scripts/` via a **pinned, checksum-verified** binary (allow-list-safe, same pattern as actionlint); config in `.github/scripts/ruff.toml` (`E,F,W,I,B,UP`).
+184. **[done]** CodeQL **`security-extended`** suite via `.github/codeql/codeql-config.yml` — broader coverage at low false-positive cost on a small Python surface.
+185. **[done]** `workflow_dispatch` on `lint`/`codeql`/`secrets-scan` for manual re-runs (not `dependency-review` — it requires a PR diff).
+186. **[roadmap]** OpenSSF **Scorecard** as a pinned `run:` binary → SARIF via `github/codeql-action/upload-sarif` — recorded with the allow-list-safe pattern; deferred to keep this PR clean (some checks want a read-token).
+187. **[roadmap]** `harden-runner` egress policy — not allow-listed, enterprise-grade for a config repo (round 3 #149 stands).
+188. **[roadmap]** Artifact attestations / SLSA provenance (`actions/attest-build-provenance`) — only meaningful once something is released/packaged; nothing here is.
+189. **[roadmap]** SBOM (CycloneDX/SPDX) workflow — no shipped artifact to bill; revisit if a package is published.
+190. **[assessed]** `paths:` filters on workflows — **rejected**: trivial CI savings here, and skipped *required* checks read as pending under branch protection (a deadlock footgun).
+191. **[hold]** Gitleaks `.gitleaks.toml` allowlist — **not added**: no current false positives, and a loose allowlist can mask real secrets; add only with a concrete fixture need.
+192. **[roadmap]** Reusable workflow for the gitleaks/dependency-review pattern — duplication is tiny (two short files); revisit if more gates appear.
+193. **[rec]** Cache pip in `lint` once more pip deps exist — today one tiny pinned install (round 3 #148 stands).
+194. **[roadmap]** Multi-Python test matrix — single stdlib module; nothing version-sensitive to matrix yet.
+195. **[rec]** Take `actions/checkout` v7+ when Renovate proposes it — safer `pull_request_target` defaults (none used today, but future-proof).
+196. **[roadmap]** CodeQL incremental DB cache — micro-optimization; analysis is already fast on this surface.
+197. **[roadmap]** Scheduled "outdated deps" awareness job (non-PR) — Renovate already covers updates; low marginal value solo.
+198. **[assessed]** `metrics.yml` top-level `contents: read` + job `contents: write` is already correct least-privilege (job-level replaces top-level) — no change.
+199. **[rec]** Re-verify the `lowlighter/metrics` SHA ↔ tag on each bump (the round-2 manual check) — a habit, noted in `docs/CI.md`.
+200. **[rec]** Renovate `groupName` for GitHub-Action updates — fold version+digest bumps into one PR to cut review clutter.
+201. **[roadmap]** Renovate `pinDependencies` for actions' declared runtimes — marginal for this set; revisit if an action bumps its node runtime.
+202. **[rec]** Inline rationale on each `timeout-minutes:` (expected runtime vs. ceiling) — helps spot regressions; light touch.
+203. **[roadmap]** Unused-`env:`-var detection across workflows — a small Python lint; low ROI while workflows are few.
+
+### AB. Self-validating CI extensions (stdlib)
+
+204. **[done]** `check_claude_settings.py` — validates `.claude/settings.json` shape **and** that each hook `command` path exists + is executable (catches a renamed/missing hook); unit-tested, wired into `lint`.
+205. **[done]** `check_catalog.py` — asserts this catalog's items are **contiguous 1..N** with a recognized `[tag]`; unit-tested, wired into `lint` (it validates this very list).
+206. **[done]** Link-checker now flags **images missing alt text** (`![](x)`), extending the accessibility guarantee; unit-tested.
+207. **[done]** The new tests run under the existing `unittest discover` step (27 tests total) and the new scripts pass `ruff`.
+208. **[assessed]** Cross-file `file.md#anchor` validation was a research candidate but is **already implemented** in `check_md_links.py` (lines 83–88) — verified, dropped.
+209. **[roadmap]** `markdownlint` (pinned binary) — style is already consistent; marginal ROI vs. added CI surface.
+210. **[roadmap]** `cspell`/`typos` spell-check with a CJK-aware ignore list — deferred (false-positive tuning cost on JP text).
+211. **[roadmap]** `shfmt --diff` on the hook — shellcheck already gates correctness; formatting is stable.
+212. **[rec]** `bats` functional tests for the hook's join branches (round 3 #136 stands) — add when the hook grows past smoke + debug coverage.
+213. **[roadmap]** A CLAUDE.md/AGENTS.md DRY checker — round 3 #158 assessed the "duplication" as intentional summaries; not worth automating.
+214. **[roadmap]** `mailto:` syntax validation in the link-checker — no mailto links in-repo; low ROI.
+215. **[assessed]** Opt-in external-URL checking stays a non-goal (offline CI is the point; round 3 #162 stands).
+216. **[rec]** Generalize JSON/YAML validation to all `.claude/`+`.github/` configs (round 3 #143) — do it when a second config appears.
+
+### AC. agmsg hook & protocol depth
+
+217. **[done]** Opt-in `AGMSG_DEBUG=1` logging — the hook explains its decisions on **stderr only** (never stdout), preserving the never-fail/quiet contract; smoke-tested.
+218. **[done]** A structured **threat-model table** in `docs/agmsg.md` (injection / exfiltration / scope-creep / resource-exhaustion / spoofing → mitigation), cross-linked from `CLAUDE.md`.
+219. **[done]** "Message conventions" in `docs/agmsg.md` — a well-formed message is a *pointer* (summary + paths/SHAs), turn-budgeted, terminated with `DONE:`/`BLOCKED:`.
+220. **[done]** Troubleshooting rows for `AGMSG_DEBUG`, SQLite **WAL** "database is locked", and **session-death** recovery.
+221. **[assessed]** Forcing `LC_ALL=C.UTF-8` in the hook — **not added**: `C.UTF-8` isn't guaranteed on every host; the sed parse is ASCII-only and already locale-safe.
+222. **[rec]** Multi-repo scaling note (`AGMSG_TEAM` per repo vs. a shared org team) — a fork-time choice (round 3 #171 stands).
+223. **[roadmap]** Bash-version guard in the hook — current code is sh-safe; no bashisms needing v4.
+224. **[rec]** Message-retention/TTL guidance (clear after N days) — folded into the DB-hygiene note; automation would be agmsg-side.
+225. **[roadmap]** Structured handoff audit log (link `/goal` → PR → commit SHA) — useful at team scale; manual trailers suffice solo.
+226. **[roadmap]** CI check that multi-agent commits carry an `*-by:` trailer — warn-only at best; noisy for solo single-agent commits.
+227. **[assessed]** Concurrent-session idempotency — agmsg `join` is idempotent and the hook guards `not_joined` first (round 3 #164 stands); the smoke test covers exit-0 invariance.
+228. **[rec]** Add the `AGMSG_DEBUG` tip to the `agmsg-onboard` skill's troubleshooting steps.
+229. **[roadmap]** Message-size / DoS-guard wrapper — agmsg has its own limits; minor for a solo setup (round 1 #37 stands).
+230. **[assessed]** Agent capability/scope examples — `CLAUDE.md` already carries concrete accept/reject cases (round 3 #156); a table would restate them.
+
+### AD. Documentation system
+
+231. **[done]** `docs/README.md` — a docs index/TOC (protocol, agmsg, CI, ADRs, catalog, changelog); closes round 3 #159.
+232. **[done]** `docs/adr/` — three MADR-lite **ADRs** (opt-in bootstrap, Actions allow-list, Renovate-over-Dependabot) + an index, recording the *why* behind the load-bearing choices.
+233. **[done]** `CHANGELOG.md` — a Keep-a-Changelog summary grouped by round.
+234. **[done]** `docs/CI.md` **"When a check fails"** runbook — each gate → likely cause → fix.
+235. **[done]** `docs/CI.md` human-settings checklist extended: topics/description/homepage, social preview, Discussions, rulesets, push-protection, OpenSSF badge.
+236. **[done]** `docs/CI.md` + ADR 002 document `ruff` and the Renovate `customManager` as the maintained-binary pattern.
+237. **[roadmap]** Split the catalog into a shipped-log + a live backlog past ~300 lines (round 3 #160) — at 272 now; do it next round.
+238. **[rec]** An ASCII/Mermaid onboarding flow in `docs/agmsg.md` §1 (check → install → join → mode) — small nicety.
+239. **[assessed]** `GOVERNANCE.md` — **skipped**: `CLAUDE.md` already is the governance doc; a separate file would duplicate it.
+240. **[rec]** `docs/CI.md` "why these versions" note for the pinned binaries (actionlint/ruff) — light, add on the next bump.
+241. **[roadmap]** Auto-generate the docs index from front-matter — manual table is fine at this size.
+242. **[assessed]** Doc cross-links are lint-enforced (relative + anchors + now alt-text) — the index/ADRs/changelog were added within that guarantee.
+
+### AE. Community health & the profile product
+
+243. **[done]** `.github/pull_request_template.md` — a short checklist reinforcing the CI gates (green, no secrets, docs, pinned, trailers).
+244. **[done]** `.github/ISSUE_TEMPLATE/config.yml` — blank issues on, contact links to Security Advisories + docs.
+245. **[done]** `.github/SUPPORT.md` — routes questions/bugs/security; completes GitHub's community-standards checklist.
+246. **[done]** `metrics.yml` `plugin_achievements` (compact) — visual social proof; regenerates on the next scheduled run.
+247. **[done]** README: `secrets-scan` + `dependency-review` badges (five workflow badges now) + links to the docs index, ADRs, and changelog.
+248. **[assessed]** `CONTRIBUTING.md` / `CODE_OF_CONDUCT.md` — **skipped** for a solo profile repo (round 3 #177 stands); a CoC is a moderation surface with no moderators.
+249. **[rec]** `plugin_habits` (coding-time patterns) in metrics — fits an automation-dev profile; add if the SVG stays compact.
+250. **[roadmap]** `plugin_skyline` (3D contributions) or a second themed metrics image — visual richness; deferred to avoid clutter.
+251. **[hold]** Full `README.en.md` + language switcher — a two-file sync burden; the EN-primary + JP-accent README already reads bilingually.
+252. **[human-settings]** Repo **topics** (`claude-code`, `agentic-workflow`, `github-actions`, `ai-automation`, `governance`) — the top discoverability lever.
+253. **[human-settings]** Repo **description** + **homepage** URL in the About panel.
+254. **[human-settings]** Custom **social-preview** image (1280×640) for link unfurls.
+255. **[human-settings]** Enable **Discussions** for Q&A separate from issues (the issue `config.yml` already points there).
+256. **[human-settings]** **Branch protection / ruleset** on `main` requiring the four gates; keep an exported ruleset JSON in-repo if adopted.
+257. **[human-settings]** **Secret-scanning push protection** on (prevention ahead of the gitleaks gate).
+258. **[human-settings]** **OpenSSF Best Practices** badge self-certification at bestpractices.dev once posture is stable.
+259. **[human-settings]** Curate **pinned repos** to the lab narrative (agmsg, ccmux, github-flow-kit, public-docs, zenn-content, lab-public).
+260. **[roadmap]** Labels-as-code (a JSON + a `github-script` sync, or an allow-listed labeler) — only if issue volume grows.
+261. **[roadmap]** Conventional-commit lint (a pinned `commitlint` binary) — over-ceremony for a solo repo; revisit if it becomes a template.
+262. **[assessed]** OG / JSON-LD SEO metadata — GitHub owns the repo's OG image; this belongs on a portfolio site, not here.
+263. **[roadmap]** Repository **rulesets-as-code** export checked into `.github/` — feasible via the API; do it alongside #256.
+264. **[rec]** A one-line "governance: see docs/CI.md" callout near the README badges — signals the allow-list before a contributor adds a failing action.
+265. **[roadmap]** Gitleaks path-exclusions for future Python test fixtures — only when a fixture intentionally embeds a synthetic secret.
+
+### AF. Method & verification (this round)
+
+266. **[done]** Plan-mode → **3 parallel research agents** (CI/supply-chain, governance/profile, agmsg/docs) → **101 net-new candidates**, deduped vs. 1–180, tagged for allow-list feasibility.
+267. **[done]** Reading the real files corrected the research (cross-file anchors already done; `metrics` lacked achievements; `pyyaml` unpinned) — grounded, not hallucinated.
+268. **[done]** Every shipped change is allow-list-compliant (stdlib / pinned binary / config / docs) — no new `uses:` action.
+269. **[done]** Local gate reproduced green before push: 27 unit tests, `ruff`, `actionlint`, both new validators, link-checker, shellcheck, hook smoke (incl. `AGMSG_DEBUG`).
+270. **[done]** Independent **QA** stand-in pass (Fable 5 unavailable in-env — recorded honestly, not asserted as a Fable verdict).
+271. **[done]** The linters are **self-applying**: `ruff` lints its own new scripts and `check_catalog` validates this very list.
+272. **[rec]** Next round: revisit Scorecard-as-binary (#186), the catalog split (#237), and whichever human-settings (#252–259) the owner has since applied.

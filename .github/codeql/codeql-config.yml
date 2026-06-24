@@ -1,0 +1,8 @@
+# CodeQL configuration for this repo.
+# Opt into the broader `security-extended` query suite on top of the default
+# suite. It adds higher-coverage security queries with a modest precision
+# trade-off — well worth it for this repo's small stdlib-Python surface.
+name: thinkyou0714 CodeQL config
+
+queries:
+  - uses: security-extended

@@ -7,6 +7,8 @@
 
 [![lint](https://github.com/thinkyou0714/thinkyou0714/actions/workflows/lint.yml/badge.svg)](https://github.com/thinkyou0714/thinkyou0714/actions/workflows/lint.yml)
 [![codeql](https://github.com/thinkyou0714/thinkyou0714/actions/workflows/codeql.yml/badge.svg)](https://github.com/thinkyou0714/thinkyou0714/actions/workflows/codeql.yml)
+[![secrets-scan](https://github.com/thinkyou0714/thinkyou0714/actions/workflows/secrets-scan.yml/badge.svg)](https://github.com/thinkyou0714/thinkyou0714/actions/workflows/secrets-scan.yml)
+[![dependency-review](https://github.com/thinkyou0714/thinkyou0714/actions/workflows/dependency-review.yml/badge.svg)](https://github.com/thinkyou0714/thinkyou0714/actions/workflows/dependency-review.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-db61a2.svg)](https://github.com/sponsors/thinkyou0714)
 
@@ -37,9 +39,9 @@ I run [**THINK YOU LAB**](https://github.com/thinkyou0714/lab-public) — a one-
 
 This profile doubles as a **governance showcase** — least-privilege, pinned, and self-validating:
 
-- 🔒 GitHub Actions pinned to commit SHAs (Renovate-maintained); `gitleaks`, `dependency-review`, and **CodeQL** gate every PR.
-- ✅ A `lint` workflow shellchecks the hook, unit-tests the tooling, runs `actionlint`, and verifies every doc link & anchor — see [`docs/CI.md`](docs/CI.md).
-- 🤝 Multi-agent coordination (Claude Code × Codex × Fable QA) runs over agmsg — protocol in [`docs/agmsg.md`](docs/agmsg.md).
+- 🔒 GitHub Actions pinned to commit SHAs (Renovate-maintained); `gitleaks`, `dependency-review`, and **CodeQL** (`security-extended`) gate every PR.
+- ✅ A self-validating `lint` workflow: shellcheck + `actionlint` + `ruff`, stdlib unit tests, and checks for settings, doc links/anchors/alt-text, and catalog numbering — see [`docs/CI.md`](docs/CI.md) · [decisions](docs/adr/README.md) · [changelog](CHANGELOG.md).
+- 🤝 Multi-agent coordination (Claude Code × Codex × Fable QA) runs over agmsg — protocol in [`docs/agmsg.md`](docs/agmsg.md) · [all docs](docs/README.md).
 
 > 🤖 **AI agents working in this repo:** start with [`CLAUDE.md`](CLAUDE.md) (the canonical protocol), then [`AGENTS.md`](AGENTS.md).
 

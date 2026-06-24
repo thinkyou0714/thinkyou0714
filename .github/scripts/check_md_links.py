@@ -6,9 +6,11 @@ allowed actions), so the link check is done here in pure stdlib Python instead
 of a marketplace action.
 
 Checks, for every committed `*.md`:
-  * relative links point to a file that exists, and
-  * any `#fragment` resolves to a GitHub-style heading anchor in the target.
-External (http/https/mailto/tel) links and images are skipped.
+  * relative links point to a file that exists,
+  * any `#fragment` resolves to a GitHub-style heading anchor in the target, and
+  * every image carries non-empty alt text (accessibility).
+External (http/https/mailto/tel) links are skipped, as are links/images written inside
+code spans or ``` fences (so documenting `![](x)` doesn't trip the check).
 Exit 1 if any problem is found.
 """
 from __future__ import annotations
@@ -19,6 +21,10 @@ import sys
 
 # [text](target) but not images ![alt](src); target captured up to first ')'.
 LINK = re.compile(r"(?<!!)\[[^\]]*\]\(([^)]+)\)")
+# Images ![alt](src); GitHub-rendered images must carry alt text for accessibility.
+IMAGE = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
+# Inline code span; blanked out (with fenced blocks) before scanning for links/images.
+INLINE_CODE = re.compile(r"`[^`]*`")
 HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
 # github-slugger removes this punctuation (keeps word chars, spaces, "-", "_");
 # spaces become hyphens below. ASCII set covers this repo's headings.
@@ -55,6 +61,19 @@ def anchors_for(path: str) -> set[str]:
     return out
 
 
+def strip_code(text: str) -> str:
+    """Blank out fenced blocks and inline code so examples aren't scanned as links."""
+    lines: list[str] = []
+    in_fence = False
+    for line in text.splitlines():
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+            lines.append("")
+            continue
+        lines.append("" if in_fence else INLINE_CODE.sub("", line))
+    return "\n".join(lines)
+
+
 def main() -> int:
     md_files: list[str] = []
     for root, dirs, files in os.walk("."):
@@ -66,7 +85,8 @@ def main() -> int:
         base_dir = os.path.dirname(md)
         with open(md, encoding="utf-8") as fh:
             text = fh.read()
-        for raw in LINK.findall(text):
+        scan = strip_code(text)
+        for raw in LINK.findall(scan):
             target = raw.strip()
             if target.startswith("<") and ">" in target:
                 target = target[1 : target.index(">")]
@@ -86,6 +106,9 @@ def main() -> int:
                 errors.append(f"{md}: broken link -> {target} (no {dest})")
             elif frag and dest.endswith(".md") and frag not in anchors_for(dest):
                 errors.append(f"{md}: missing anchor {path_part}#{frag}")
+        for alt, src in IMAGE.findall(scan):
+            if not alt.strip():
+                errors.append(f"{md}: image missing alt text -> {src.strip()}")
 
     for e in errors:
         print(f"::error::{e}")

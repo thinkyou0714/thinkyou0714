@@ -1,0 +1,11 @@
+# Ruff config for this repo's CI helper scripts (stdlib-only Python).
+# Ruff runs in CI as a pinned, checksum-verified release binary (see lint.yml),
+# because the org Actions allow-list rules out a marketplace ruff action — the
+# same reason actionlint is run as a downloaded binary.
+line-length = 100
+target-version = "py39"
+
+[lint]
+# E/W pycodestyle, F pyflakes, I import-sort, B bugbear (real-bug heuristics),
+# UP pyupgrade (modern syntax). Conservative, high-signal, low false-positive.
+select = ["E", "F", "W", "I", "B", "UP"]

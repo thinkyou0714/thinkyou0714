@@ -1,4 +1,23 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["local>thinkyou0714/.github", "helpers:pinGitHubActionDigests"]
+  "extends": ["local>thinkyou0714/.github", "helpers:pinGitHubActionDigests"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Surface actionlint release bumps for the pinned binary in lint.yml. Renovate bumps ACTIONLINT_VERSION; refresh ACTIONLINT_SHA256 from the release checksums (the lint sha256 check fails closed until you do).",
+      "managerFilePatterns": ["/^\\.github/workflows/lint\\.yml$/"],
+      "matchStrings": ["ACTIONLINT_VERSION:\\s*(?<currentValue>\\S+)"],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "rhysd/actionlint",
+      "extractVersionTemplate": "^v(?<version>.+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "Surface ruff release bumps for the pinned binary in lint.yml. Renovate bumps RUFF_VERSION; refresh RUFF_SHA256 from the release checksums (the lint sha256 check fails closed until you do).",
+      "managerFilePatterns": ["/^\\.github/workflows/lint\\.yml$/"],
+      "matchStrings": ["RUFF_VERSION:\\s*(?<currentValue>\\S+)"],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "astral-sh/ruff"
+    }
+  ]
 }

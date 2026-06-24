@@ -67,5 +67,26 @@ class TestLinkDetection(unittest.TestCase):
         self.assertEqual(found, ["docs/x.md"])
 
 
+class TestImageAltText(unittest.TestCase):
+    def test_image_with_alt_captured(self):
+        self.assertEqual(c.IMAGE.findall("![a description](x.png)"), [("a description", "x.png")])
+
+    def test_image_missing_alt_has_empty_group(self):
+        alts = [alt for alt, _ in c.IMAGE.findall("![](x.png)")]
+        self.assertEqual(alts, [""])
+
+
+class TestCodeStripping(unittest.TestCase):
+    def test_inline_code_example_ignored(self):
+        # Documenting `![](x)` in prose must not be scanned as a real image.
+        self.assertNotIn("![](x)", c.strip_code("see `![](x)` for the pattern"))
+
+    def test_fenced_block_stripped(self):
+        self.assertEqual(c.strip_code("```\n![](x)\n```\n").strip(), "")
+
+    def test_normal_text_preserved(self):
+        self.assertIn("![real](y.png)", c.strip_code("![real](y.png)"))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -5,6 +5,7 @@ on:
     branches: [main]
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -35,14 +36,26 @@ jobs:
               exit 1
             fi
           done
-          echo "hook exits 0 for all SessionStart sources"
+          # AGMSG_DEBUG=1 must also exit 0, and its debug logs must go to stderr only.
+          if ! printf '{"source":"startup"}' | AGMSG_DEBUG=1 bash .claude/hooks/agmsg-bootstrap.sh >/dev/null 2>&1; then
+            echo "::error::hook exited non-zero with AGMSG_DEBUG=1"
+            exit 1
+          fi
+          out="$(printf '{"source":"startup"}' | AGMSG_DEBUG=1 bash .claude/hooks/agmsg-bootstrap.sh 2>/dev/null)"
+          case "$out" in
+            *"[agmsg:debug]"*) echo "::error::AGMSG_DEBUG output leaked to stdout (must be stderr-only)"; exit 1 ;;
+          esac
+          echo "hook exits 0 for all SessionStart sources (incl. AGMSG_DEBUG=1)"
 
-      - name: Validate .claude/settings.json
+      - name: Validate JSON (.claude/settings.json)
         run: python3 -m json.tool .claude/settings.json > /dev/null
+
+      - name: Validate .claude/settings.json structure + hook paths
+        run: python3 .github/scripts/check_claude_settings.py
 
       - name: Validate workflow YAML
         run: |
-          python3 -c "import yaml" 2>/dev/null || python3 -m pip install --quiet pyyaml
+          python3 -c "import yaml" 2>/dev/null || python3 -m pip install --quiet -r .github/requirements-ci.txt
           python3 - <<'PY'
           import glob, sys, yaml
           bad = 0
@@ -58,6 +71,8 @@ jobs:
 
       # actionlint is not on the Actions allow-list, so run the pinned, checksum-
       # verified release binary in a run step. It also shellchecks every run: block.
+      # Renovate surfaces version bumps via the customManager in renovate.json;
+      # refresh ACTIONLINT_SHA256 from the release checksums (CI fails closed otherwise).
       - name: Lint workflows (actionlint)
         env:
           ACTIONLINT_VERSION: 1.7.12
@@ -69,11 +84,27 @@ jobs:
           tar -xzf /tmp/actionlint.tgz -C /tmp actionlint
           /tmp/actionlint -color
 
-      - name: Unit tests (link checker)
+      # ruff is not allow-listed either; same pinned, checksum-verified binary pattern.
+      # Config lives in .github/scripts/ruff.toml.
+      - name: Lint Python (ruff)
+        env:
+          RUFF_VERSION: 0.15.19
+          RUFF_SHA256: 0bfabff71f317e0e3b8c363043b888f045eff092073d5d9bd0ac7f8ede465711
+        run: |
+          url="https://github.com/astral-sh/ruff/releases/download/${RUFF_VERSION}/ruff-x86_64-unknown-linux-gnu.tar.gz"
+          curl -fsSL "$url" -o /tmp/ruff.tgz
+          echo "${RUFF_SHA256}  /tmp/ruff.tgz" | sha256sum -c -
+          tar -xzf /tmp/ruff.tgz -C /tmp
+          /tmp/ruff-x86_64-unknown-linux-gnu/ruff check --config .github/scripts/ruff.toml .github/scripts/
+
+      - name: Unit tests (link checker, settings, catalog)
         run: python3 -m unittest discover -s .github/scripts -p 'test_*.py'
 
       # This repo allow-lists GitHub Actions, so the link/anchor check is a stdlib
-      # Python script (not a marketplace action). It verifies relative links exist
-      # and #anchors resolve to GitHub heading slugs (e.g. #4-goal-handoff-template).
+      # Python script (not a marketplace action). It verifies relative links exist,
+      # #anchors resolve to GitHub heading slugs, and images carry alt text.
       - name: Check markdown links & anchors
         run: python3 .github/scripts/check_md_links.py
+
+      - name: Check ideas-catalog numbering
+        run: python3 .github/scripts/check_catalog.py

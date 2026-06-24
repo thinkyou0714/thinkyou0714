@@ -28,6 +28,13 @@ trap 'exit 0' EXIT
 
 PREFIX="[agmsg]"
 say() { printf '%s %s\n' "$PREFIX" "$*"; }
+# Opt-in debug logging. Writes to stderr only (stdout is the model's context) and
+# only when AGMSG_DEBUG=1, so it never alters the never-fail / quiet-by-default contract.
+dbg() {
+  if [ "${AGMSG_DEBUG:-0}" = "1" ]; then
+    printf '[agmsg:debug] %s\n' "$*" >&2
+  fi
+}
 
 # --- Parse the SessionStart JSON from stdin (no jq dependency). ------------------------
 # We only need "source" (startup|resume|clear|compact). Keep it tolerant of formatting.
@@ -59,8 +66,12 @@ HAS_SQLITE=0; have sqlite3 && HAS_SQLITE=1
 HAS_NPX=0;    have npx     && HAS_NPX=1
 INSTALLED=0;  [ -d "$SKILL_DIR/scripts" ] && INSTALLED=1
 
+dbg "source=$SOURCE repo=$REPO_NAME team=$TEAM agent=$AGENT skill_dir=$SKILL_DIR"
+dbg "has_sqlite=$HAS_SQLITE has_npx=$HAS_NPX installed=$INSTALLED auto_bootstrap=${AGMSG_AUTO_BOOTSTRAP:-0}"
+
 # --- Branch: not installed. -----------------------------------------------------------
 if [ "$INSTALLED" -eq 0 ]; then
+  dbg "branch=not-installed (advise only)"
   if [ "$HAS_SQLITE" -eq 0 ]; then
     say "not installed; sqlite3 is missing (agmsg's only hard dep)."
     say "install sqlite3, then:  /plugin marketplace add fujibee/agmsg  ->  /plugin install agmsg@fujibee-agmsg"
@@ -105,8 +116,10 @@ if [ "${AGMSG_AUTO_BOOTSTRAP:-0}" = "1" ] && [ -x "$SKILL_DIR/scripts/join.sh" ]
   if [ "$already" -eq 0 ]; then
     # join.sh requires <team> <agent_id> <type> <project_path> — all 4 mandatory.
     if "$SKILL_DIR/scripts/join.sh" "$TEAM" "$AGENT" claude-code "$PROJECT_DIR" >/dev/null 2>&1; then
+      dbg "join.sh succeeded"
       say "auto-joined team '$TEAM' as '$AGENT' (v$VERSION). Check inbox with /agmsg."
     else
+      dbg "join.sh failed or unavailable; staying advise-only"
       say "ready (v$VERSION). Auto-join skipped (run /agmsg to join team '$TEAM' as '$AGENT')."
     fi
   else

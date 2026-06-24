@@ -69,6 +69,9 @@ These conventions are **protocol-level** — agmsg's plain-text bash+sqlite tran
   `claude-code` / `codex` types are fine.
 - **Least privilege.** Don't broaden `.claude/settings.json` permissions or
   `sandbox.filesystem.allowWrite` beyond `~/.agents/skills/agmsg/` without cause.
+- **Threat model.** The concrete peer-message threats (injection / exfiltration / scope-creep /
+  resource-exhaustion / spoofing) and their mitigations are tabulated in
+  [`docs/agmsg.md` → Threat model](docs/agmsg.md#threat-model).
 
 ## When to ask the human (vs. proceed)
 

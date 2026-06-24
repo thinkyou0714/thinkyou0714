@@ -1,0 +1,10 @@
+# Issue chooser config. Blank issues stay enabled (small profile repo); the contact
+# links route people to the right place first.
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability (private)
+    url: https://github.com/thinkyou0714/thinkyou0714/security/advisories/new
+    about: Please report privately via Security Advisories — see SECURITY.md. Do not open a public issue.
+  - name: agmsg / CI / governance docs
+    url: https://github.com/thinkyou0714/thinkyou0714/tree/main/docs
+    about: How this repo coordinates agents and gates CI — worth a read before filing.
