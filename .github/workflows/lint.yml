@@ -2,6 +2,7 @@ name: lint
 
 on:
   pull_request:
+    branches: [main]
   push:
     branches: [main]
 
@@ -30,7 +31,7 @@ jobs:
 
       - name: Validate workflow YAML
         run: |
-          python3 -m pip install --quiet pyyaml
+          python3 -c "import yaml" 2>/dev/null || python3 -m pip install --quiet pyyaml
           python3 - <<'PY'
           import glob, sys, yaml
           bad = 0
@@ -43,10 +44,8 @@ jobs:
           sys.exit(1 if bad else 0)
           PY
 
-      # Offline = no flaky external HTTP; --include-fragments verifies #anchors
-      # against local headings (catches broken cross-links like #4-goal-handoff-template).
+      # This repo allow-lists GitHub Actions, so the link/anchor check is a stdlib
+      # Python script (not a marketplace action). It verifies relative links exist
+      # and #anchors resolve to GitHub heading slugs (e.g. #4-goal-handoff-template).
       - name: Check markdown links & anchors
-        uses: lycheeverse/lychee-action@8646ba30535128ac92d33dfc9133794bfdd9b411 # v2.8.0
-        with:
-          args: "--offline --include-fragments --no-progress ."
-          fail: true
+        run: python3 .github/scripts/check_md_links.py

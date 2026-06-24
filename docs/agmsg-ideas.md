@@ -156,7 +156,7 @@ it now.
 
 Round 1 hardened the agmsg *adoption*; round 2 hardens the *repo around it* (supply-chain
 pinning, least privilege, self-validating CI) and polishes docs. Cumulative catalog:
-**130 ideas** (100 + 30). Same tags ([done]/[rec]/[roadmap]).
+**132 ideas** (100 + 32). Same tags ([done]/[rec]/[roadmap]).
 
 ### N. Supply-chain action pinning
 
@@ -184,7 +184,7 @@ pinning, least privilege, self-validating CI) and polishes docs. Cumulative cata
 116. **[done]** `shellcheck` the SessionStart hook on every PR/push so it can't silently regress.
 117. **[done]** Validate `.claude/settings.json` parses as JSON in CI.
 118. **[done]** Validate every workflow YAML parses in CI.
-119. **[done]** Markdown link + **anchor** check (lychee, `--offline --include-fragments`) — catches broken cross-links/anchors (the round-1 `#4-goal-handoff-template` fix would have been caught here).
+119. **[done]** Markdown link + **anchor** check via a dependency-free stdlib script (`.github/scripts/check_md_links.py`) — verifies relative links exist and `#anchors` resolve to GitHub heading slugs (would have caught the round-1 `#4-goal-handoff-template` fix). A marketplace link-checker was the first attempt but the repo's Actions allow-list blocks it — see #131.
 120. **[done]** `lint` is least-privilege (`contents: read`), SHA-pinned, with `concurrency:` + `timeout-minutes:`.
 121. **[roadmap]** `actionlint` for deeper workflow-security lint — shellcheck + YAML + Renovate cover the high-value cases for now.
 122. **[roadmap]** `markdownlint` style rules — noisy; link/anchor correctness matters more than style here.
@@ -202,3 +202,8 @@ pinning, least privilege, self-validating CI) and polishes docs. Cumulative cata
 ### R. Doc correctness
 
 130. **[done]** Re-verify internal markdown anchors/links resolve — now enforced by the `lint` link-check henceforth. (The `agmsg-onboard` skill's `/goal` link was corrected to `#4-goal-handoff-template` per GitHub's heading-anchor rules.)
+
+### S. Working with the repo's Actions allow-list (discovered in CI)
+
+131. **[done]** The repo enforces a **GitHub Actions allow-list** (only `actions/*`, verified-marketplace, and patterns like `gitleaks/gitleaks-action@*`, `lowlighter/metrics@*`). A first attempt to use a marketplace link-checker (`lycheeverse/lychee-action`) caused a `startup_failure`; the pinned `actions/checkout`, `actions/dependency-review-action`, and `gitleaks-action` all comply.
+132. **[done]** Replaced the marketplace link-checker with the stdlib `.github/scripts/check_md_links.py` so the link/anchor gate runs under the allow-list with no third-party action.
