@@ -2,44 +2,44 @@
 
 ![GitHub metrics](github-metrics.svg)
 
-> **Solo AI automation dev** — Building Claude Code × n8n × Obsidian tooling for JP/EN devs.
+> **Forward-deployed AI engineer (in the making).** I turn ambiguous, real-world problems into **deployed** software — combining applied-physics first-principles, mission-critical hardware rigor, and zero-to-one AI automation.
 
-I run [**THINK YOU LAB**](https://github.com/thinkyou0714/lab-public) — a one-person research lab focused on AI-assisted developer workflows, knowledge-base automation, and "personal AIOS" infrastructure.
+応用物理 × 製造/電気の信頼性エンジニアリング × ゼロイチの AI 自動化。**曖昧な現場を「動くソフトウェア」に変える**ことに取り組んでいます。JP/EN bilingual.
 
-## Currently working on
+## What I do
+
+- 🚀 **Build & ship AI automation end-to-end** — agentic workflows, MCP tools, knowledge-base automation. From hearing a workflow problem → designing → deploying → adoption. Run [**THINK YOU LAB**](https://github.com/thinkyou0714/lab-public), a one-person studio for AI-assisted developer workflows.
+- 🛡️ **Mission-critical reliability background** — led high-voltage reliability testing of power equipment (IEC 60060 / 62271) at an accredited test lab, and drove a multi-model cost-reduction program in servo-amplifier design.
+- 🧭 **Domain edge**: manufacturing × electrical × AI implementation — I can sit between a shop-floor problem and a working AI system.
+
+## Currently building
 
 - 🧰 [`ccmux`](https://github.com/thinkyou0714/ccmux) — Claude Code multiplexer (Zellij × git worktree × Obsidian)
-- 📝 [`github-flow-kit`](https://github.com/thinkyou0714/github-flow-kit) — 4 Claude Code skills for GitHub-native devs (pr-respond, release-notes, issue-triage, repo-tour)
-- 🌐 [`public-docs`](https://github.com/thinkyou0714/public-docs) — Next.js + MDX template implementation guides
-- ✍️ [`zenn-content`](https://github.com/thinkyou0714/zenn-content) — Zenn 記事ソース (AI 自動化・LAB infra)
+- 📝 [`github-flow-kit`](https://github.com/thinkyou0714/github-flow-kit) — Claude Code skills for GitHub-native devs (pr-respond, release-notes, issue-triage, repo-tour)
+- 🌐 [`public-docs`](https://github.com/thinkyou0714/public-docs) — Next.js + MDX implementation-guide template
+- ✍️ [`zenn-content`](https://github.com/thinkyou0714/zenn-content) — write-ups on AI automation & agentic workflows (JP/EN)
+- 🧪 **[FDE portfolio starter](examples/fde-portfolio-starter/)** — a production-minded service scaffold (FastAPI · LLM agent · eval harness · Docker) that turns messy input into structured outcomes. More repos rolling out.
 
 ## Stack
 
-| Layer | Tools |
+| | Tools |
 |---|---|
-| AI Coding | Claude Code · Codex · Cursor (CLAUDE.md + AGENTS.md canonical) |
-| Automation | n8n (200+ WF) · autoclaw (Claude proxy) · Slack bot infra |
-| Knowledge | Obsidian Local REST API + Supabase pgvector + Ollama embeddings |
-| Stack | Next.js 16 · Supabase · Stripe · Vercel · Docker |
+| Using now | Claude Code · MCP · n8n (200+ WF) · Supabase (pgvector) · Next.js / TypeScript |
+| Building toward (in public) | Python · FastAPI · LLM agents (LangGraph) · RAG · eval harnesses · Docker / cloud deploy |
+| Domain | Manufacturing (servo-amp design, cost-down, EOL) · Electrical (HV testing, IEC standards) |
 
-## Topics I write about
+> Turning a lowcode / automation background into production engineering — the FDE portfolio repos (rolling out) are where that happens.
 
-`claude-code` `agentic-workflow` `mcp` `model-context-protocol` `n8n` `obsidian` `ai-automation` `solo-dev` `developer-tooling` `personal-aios`
+## Topics I write & build around
+
+`forward-deployed-engineer` `agentic-workflow` `mcp` `model-context-protocol` `llm-agents` `rag` `ai-automation` `developer-tooling` `manufacturing-ai`
 
 ## Reach
 
-- 📨 Issues & PRs welcome on any of the repos above
+- 💬 Open to **forward-deployed / AI-implementation** problems & collaboration (JP/EN) — issues & PRs welcome on any repo above
 - 🌐 Site: [github.com/thinkyou0714](https://github.com/thinkyou0714)
-- ✍️ Zenn: 順次公開予定
-
-## Sponsor
-
-If my open-source work helps you, support is appreciated:
-
-- [GitHub Sponsors](https://github.com/sponsors/thinkyou0714) (申請中)
-- Ko-fi / Buy Me a Coffee (準備中)
-- Custom URLs (note / Gumroad) — 準備中
+- ✍️ Zenn: 順次公開
 
 ---
 
-_Profile crafted 2026-05-16 — auto-refreshed daily via [lowlighter/metrics](https://github.com/lowlighter/metrics). Solo lab work, JP/EN parallel. Pinned 6 repos curated quarterly per portfolio narrative._
+_Profile auto-refreshed daily via [lowlighter/metrics](https://github.com/lowlighter/metrics). Repositioning toward Forward Deployed Engineer — pinned repos curated to show end-to-end delivery._
