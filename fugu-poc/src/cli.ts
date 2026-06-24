@@ -102,7 +102,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     prompt = (await readStdin()).trim();
   }
   if (!prompt) {
-    process.stderr.write("Error: no prompt provided.\n\n" + HELP);
+    process.stderr.write(`Error: no prompt provided.\n\n${HELP}`);
     return 1;
   }
 
@@ -125,7 +125,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
       ? await client.chat(messages, { reasoningEffort: args.effort })
       : await client.respond(prompt, { reasoningEffort: args.effort });
 
-    process.stdout.write(renderResult(result, args.json) + "\n");
+    process.stdout.write(`${renderResult(result, args.json)}\n`);
 
     if (result.status === "incomplete") {
       process.stderr.write(`warning: response incomplete (${result.incompleteReason ?? "unknown"})\n`);
@@ -150,7 +150,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
         process.stderr.write(`api code: ${err.apiError.code}\n`);
       }
     } else {
-      process.stderr.write(redactString(String(err)) + "\n");
+      process.stderr.write(`${redactString(String(err))}\n`);
     }
     return 1;
   }

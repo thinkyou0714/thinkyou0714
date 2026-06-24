@@ -39,7 +39,9 @@ export function createFuguMcpServer(client: FuguClient, models: string[] = ["fug
       title: "Fugu chat",
       description: "Multi-turn chat with Fugu (Chat Completions API).",
       inputSchema: {
-        messages: z.array(z.object({ role: z.enum(["system", "developer", "user", "assistant"]), content: z.string() })),
+        messages: z.array(
+          z.object({ role: z.enum(["system", "developer", "user", "assistant"]), content: z.string() }),
+        ),
         model: modelField,
       },
     },

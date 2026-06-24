@@ -228,6 +228,7 @@ test("proxy stream emits an error frame and no [DONE] when the backend stream fa
       yield { type: "delta", textDelta: "partial" };
       throw new Error("mid-stream boom");
     },
+    // biome-ignore lint/correctness/useYield: throwing mock generator; never iterated in this test
     async *respondStream(): AsyncGenerator<FuguStreamEvent> {
       throw new Error("nope");
     },
