@@ -149,3 +149,56 @@ databases, cost dashboards, supervisor daemons. Building those here would (a) fo
 (b) contradict its no-daemon/no-framework ethos, and (c) add maintenance burden a solo profile
 repo shouldn't carry. They're parked in **[roadmap]** so the door stays open without paying for
 it now.
+
+---
+
+## Round 2 — governance, supply chain & self-validation
+
+Round 1 hardened the agmsg *adoption*; round 2 hardens the *repo around it* (supply-chain
+pinning, least privilege, self-validating CI) and polishes docs. Cumulative catalog:
+**130 ideas** (100 + 30). Same tags ([done]/[rec]/[roadmap]).
+
+### N. Supply-chain action pinning
+
+101. **[done]** Pin `actions/checkout` to a SHA (`# v4.2.2`) in secrets-scan + dependency-review (was floating `@v4`).
+102. **[done]** Pin `gitleaks/gitleaks-action` to a SHA (`# v2.3.9`) — stay on the current major; Renovate proposes v3 separately.
+103. **[done]** Pin `actions/dependency-review-action` to a SHA (`# v4.9.0`).
+104. **[done]** Add `helpers:pinGitHubActionDigests` to `renovate.json` so Renovate keeps every action SHA-pinned and bumps the `# vX.Y` comment automatically — pinning becomes *maintained*, not a one-off.
+105. **[done]** Verify each pinned SHA resolves to the intended release before commit (github.com commit page; `api.github.com`/`git` are proxy-blocked here).
+106. **[done]** `persist-credentials: false` on read-only checkouts (secrets-scan, dependency-review, lint) — no token left on disk for steps that never push.
+107. **[rec]** Review + merge Renovate's eventual major-bump PRs (checkout v5, gitleaks v3, dependency-review v5) deliberately, not blind.
+108. **[roadmap]** CI pin-enforcement via `zizmor` (fail on unpinned `uses:`) — Renovate + review already maintain pins; overlap not worth it at this size.
+109. **[roadmap]** `step-security/harden-runner` egress policy — enterprise-grade; overkill for a profile repo.
+110. **[roadmap]** SHA-pin first-party `actions/*` too once Renovate is confirmed managing digests (low risk; first-party).
+
+### O. Least privilege & workflow hygiene
+
+111. **[done]** Remove `pull-requests: write` from `metrics.yml` — dead since the job switched to `output_action: commit` (direct SVG commit, no PR).
+112. **[done]** Add `timeout-minutes: 10` to `dependency-review.yml` (was unbounded).
+113. **[done]** Keep top-level `permissions:` minimal across workflows; grant write only at the job that needs it.
+114. **[rec]** Consider top-level `permissions: {}` + per-job grants once verified not to disturb the finicky metrics action.
+115. **[roadmap]** Branch protection requiring `lint` / `secrets-scan` / `dependency-review` on `main` (repo Settings — not committable from here).
+
+### P. Self-validating CI (new `lint` workflow)
+
+116. **[done]** `shellcheck` the SessionStart hook on every PR/push so it can't silently regress.
+117. **[done]** Validate `.claude/settings.json` parses as JSON in CI.
+118. **[done]** Validate every workflow YAML parses in CI.
+119. **[done]** Markdown link + **anchor** check (lychee, `--offline --include-fragments`) — catches broken cross-links/anchors (the round-1 `#4-goal-handoff-template` fix would have been caught here).
+120. **[done]** `lint` is least-privilege (`contents: read`), SHA-pinned, with `concurrency:` + `timeout-minutes:`.
+121. **[roadmap]** `actionlint` for deeper workflow-security lint — shellcheck + YAML + Renovate cover the high-value cases for now.
+122. **[roadmap]** `markdownlint` style rules — noisy; link/anchor correctness matters more than style here.
+
+### Q. Repo hygiene & governance files
+
+123. **[done]** First `.editorconfig` (LF, final newline, trim trailing WS; markdown exempt so hard line-breaks survive).
+124. **[done]** `.shellcheckrc` so local and CI shellcheck agree.
+125. **[done]** `.github/SECURITY.md` using GitHub **private vulnerability reporting** (no email address committed).
+126. **[done]** Agent-attribution git-trailer convention (`Implemented-by` / `Verified-by` / `Orchestrated-by`) in `CLAUDE.md`.
+127. **[rec]** Optional `.pre-commit-config.yaml` (shellcheck + gitleaks + whitespace) for local pre-commit — CI already covers it, so left to preference.
+128. **[roadmap]** Issue/PR templates, `docs/CI.md`, `security.txt`, `FUNDING.yml` — noise for a solo profile repo; revisit if it gains contributors.
+129. **[roadmap]** OpenSSF Scorecard workflow — useful signal, low ROI at this size; add if the repo grows.
+
+### R. Doc correctness
+
+130. **[done]** Re-verify internal markdown anchors/links resolve — now enforced by the `lint` link-check henceforth. (The `agmsg-onboard` skill's `/goal` link was corrected to `#4-goal-handoff-template` per GitHub's heading-anchor rules.)

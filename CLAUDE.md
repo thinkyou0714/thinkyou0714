@@ -82,5 +82,10 @@ Do not stall a task to confirm a default.
 - Develop on the assigned feature branch; never push to `main` without explicit permission.
 - Keep diffs minimal and on-topic; don't reformat unrelated files.
 - GitHub Actions: pin third-party actions to a commit SHA (with a `# vX.Y` comment), declare
-  least-privilege `permissions:`, and keep `concurrency:` + `timeout-minutes:`.
-- Open PRs as **draft** first. Let `secrets-scan` and `dependency-review` gate the merge.
+  least-privilege `permissions:`, and keep `concurrency:` + `timeout-minutes:`. Renovate keeps
+  the pinned digests current (`helpers:pinGitHubActionDigests`).
+- **Agent attribution.** For multi-agent work, credit contributors with git trailers in the
+  commit footer — `Implemented-by: codex`, `Verified-by: fable-qa`, `Orchestrated-by: claude-code`
+  (use what applies; omit for single-agent commits).
+- Open PRs as **draft** first. Let `lint`, `secrets-scan`, and `dependency-review` gate the merge
+  (`lint` shellchecks the hooks, validates JSON/YAML, and checks doc links/anchors).

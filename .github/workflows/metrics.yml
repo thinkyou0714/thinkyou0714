@@ -20,7 +20,6 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: write
-      pull-requests: write
     steps:
       - name: Generate metrics SVG
         uses: lowlighter/metrics@65836723097537a54cd8eb90f61839426b4266b6 # v3.34

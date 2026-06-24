@@ -1,4 +1,4 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["local>thinkyou0714/.github"]
+  "extends": ["local>thinkyou0714/.github", "helpers:pinGitHubActionDigests"]
 }
