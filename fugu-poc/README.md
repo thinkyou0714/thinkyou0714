@@ -34,8 +34,9 @@ to answer directly or to delegate to and synthesize a team of expert frontier mo
   **proxy** (`createProxyServer` / `fugu-proxy` bin) so Cursor / n8n / any OpenAI-SDK
   tool can target Fugu — with failover — at a `localhost` endpoint; a **Fugu MCP
   server** (`integrations/mcp/`, `fugu_respond` / `fugu_chat`) for Claude Code / Cursor / Codex;
-  and a zero-dep **`fugu-obsidian`** CLI (`integrations/obsidian/`) that answers questions
-  about your Obsidian notes via the Local REST API.
+  a zero-dep **`fugu-obsidian`** CLI (`integrations/obsidian/`) that answers questions
+  about your Obsidian notes via the Local REST API; and an **n8n community node**
+  (`integrations/n8n/`) — a declarative `Fugu` node + `Fugu API` credential.
 
 ## Install
 
@@ -175,7 +176,8 @@ fugu-poc/
 ├── test/               # fugu-client / timeout / p2 / p3 / p4 / mcp / obsidian tests
 ├── integrations/
 │   ├── mcp/            # Fugu MCP server (own package; @modelcontextprotocol/sdk + zod)
-│   └── obsidian/       # fugu-obsidian CLI (own package; zero-dep, Local REST API)
+│   ├── obsidian/       # fugu-obsidian CLI (own package; zero-dep, Local REST API)
+│   └── n8n/            # n8n-nodes-fugu (own package; declarative node + credential)
 ├── .github/workflows/  # ci / release (changesets + npm OIDC) / codeql (templates)
 └── tsdown.config.ts · biome.json · .changeset · tsconfig.json
 ```

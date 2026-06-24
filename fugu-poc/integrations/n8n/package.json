@@ -1,0 +1,28 @@
+{
+  "name": "n8n-nodes-fugu",
+  "version": "0.1.0",
+  "private": true,
+  "description": "n8n community node for Sakana Fugu (OpenAI-compatible multi-agent API).",
+  "keywords": ["n8n-community-node-package", "n8n", "fugu", "sakana", "llm"],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.15"
+  },
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "credentials": ["dist/credentials/FuguApi.credentials.js"],
+    "nodes": ["dist/nodes/Fugu/Fugu.node.js"]
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc && node -e \"require('fs').cpSync('nodes','dist/nodes',{recursive:true,filter:(s)=>!s.endsWith('.ts')})\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "n8n-workflow": "*",
+    "typescript": "^5.6.0"
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  }
+}
