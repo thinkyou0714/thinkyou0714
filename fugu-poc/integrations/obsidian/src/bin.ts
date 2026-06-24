@@ -30,8 +30,11 @@ function parseArgs(argv: string[]): ParsedArgs {
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--help" || arg === "-h") out.help = true;
-    else if (arg === "--path") target = { path: argv[++i] ?? "" };
-    else if (arg === "--model") out.model = argv[++i];
+    else if (arg === "--path") {
+      const value = argv[++i];
+      if (value === undefined) throw new Error("--path requires a value");
+      target = { path: value };
+    } else if (arg === "--model") out.model = argv[++i];
     else if (arg === "--heading") out.heading = argv[++i];
     else if (arg === "--effort") {
       const v = argv[++i];

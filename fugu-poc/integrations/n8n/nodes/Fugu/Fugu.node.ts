@@ -71,13 +71,17 @@ export class Fugu implements INodeType {
         name: "effort",
         type: "options",
         options: [
+          { name: "Model Default", value: "" },
           { name: "High", value: "high" },
           { name: "X-High", value: "xhigh" },
           { name: "Max", value: "max" },
         ],
-        default: "high",
+        default: "",
+        description:
+          'Reasoning effort. "Model Default" omits it so Fugu uses its own default — matching the core client, which only sends reasoning when set.',
         displayOptions: { show: { operation: ["respond"] } },
-        routing: { request: { body: { reasoning: { effort: "={{$value}}" } } } },
+        // Omit `reasoning` entirely when unset (undefined is dropped on JSON serialization).
+        routing: { request: { body: { reasoning: "={{ $value ? { effort: $value } : undefined }}" } } },
       },
       {
         displayName: "Messages (JSON)",

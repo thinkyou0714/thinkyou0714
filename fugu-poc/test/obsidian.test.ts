@@ -72,6 +72,11 @@ test("runs Fugu on the active note and appends the answer", async () => {
   assert.equal(answer, "ANSWER-42");
   assert.match(obs.notes.active, /## 🐡 Fugu/);
   assert.match(obs.notes.active, /ANSWER-42/);
+  // Append must use POST (never PUT, which would overwrite the whole note).
+  assert.deepEqual(
+    obs.calls.map((c) => c.method),
+    ["GET", "POST"],
+  );
   // The prompt carried the note body and the question.
   assert.match(fg.inputs[0], /My note body/);
   assert.match(fg.inputs[0], /What is missing\?/);
@@ -114,4 +119,53 @@ test("ObsidianClient redacts a secret echoed in an error body", async () => {
     assert.match(msg, /Obsidian API error 401/);
     return true;
   });
+});
+
+test("ObsidianClient redacts a secret in a network-error message (catch branch)", async () => {
+  const fakeSecret = ["sk", "live", "BADC0DE1234567890abc"].join("-");
+  const throwing = (async () => {
+    throw new Error(`connect ECONNREFUSED sending Authorization: Bearer ${fakeSecret}`);
+  }) as unknown as typeof fetch;
+  await assert.rejects(obsidian(throwing).getActiveNote(), (err: unknown) => {
+    const msg = err instanceof Error ? err.message : String(err);
+    assert.ok(!msg.includes(fakeSecret), "raw secret must not appear in the network error");
+    assert.match(msg, /\[REDACTED\]/);
+    assert.match(msg, /Obsidian request failed/);
+    return true;
+  });
+});
+
+test("refuses path-traversal note paths before any request leaves the process", async () => {
+  const obs = obsidianMock({ active: "x" });
+  await assert.rejects(
+    runFuguOnNote(
+      { notes: obsidian(obs.fetchImpl), fugu: fugu(fuguMock("a").fetchImpl) },
+      { target: { path: "../../etc/passwd" } },
+    ),
+    /Invalid note path/,
+  );
+  assert.deepEqual(obs.calls, [], "no HTTP call may be made for a traversal path");
+});
+
+test("rejects '.', '..' and empty segments at the client boundary", async () => {
+  const never = (async () => {
+    throw new Error("fetch must not be called for an invalid path");
+  }) as unknown as typeof fetch;
+  const client = obsidian(never);
+  await assert.rejects(client.getNote("Projects/../Secret.md"), /Invalid note path/);
+  await assert.rejects(client.appendToNote("../x.md", "hi"), /Invalid note path/);
+  await assert.rejects(client.getNote("a//b.md"), /Invalid note path/);
+});
+
+test("encodes spaces and subfolders in a vault path", async () => {
+  const obs = obsidianMock({ "My Notes/Tasks 2026.md": "body" });
+  await runFuguOnNote(
+    { notes: obsidian(obs.fetchImpl), fugu: fugu(fuguMock("ok").fetchImpl) },
+    { target: { path: "My Notes/Tasks 2026.md" } },
+  );
+  // Reads then appends to the same (decoded) key; only GET + POST, never PUT.
+  assert.deepEqual(
+    obs.calls.map((c) => `${c.method} ${c.key}`),
+    ["GET My Notes/Tasks 2026.md", "POST My Notes/Tasks 2026.md"],
+  );
 });

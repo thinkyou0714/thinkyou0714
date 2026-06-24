@@ -30,13 +30,21 @@ export interface NoteStore {
   appendToNote(path: string, markdown: string): Promise<void>;
 }
 
-/** Encode each path segment but keep the `/` separators (so nested notes work). */
+/**
+ * Encode each path segment but keep the `/` separators (so nested notes work).
+ * Rejects empty / `.` / `..` segments: `encodeURIComponent("..")` is `".."`, which the
+ * WHATWG URL parser would then collapse, letting a path escape the `/vault/` namespace and
+ * address an arbitrary server route — for a command that both reads AND appends, that is a
+ * write primitive, so we refuse it rather than encode it.
+ */
 function encodeVaultPath(path: string): string {
-  return path
-    .replace(/^\/+/, "")
-    .split("/")
-    .map((seg) => encodeURIComponent(seg))
-    .join("/");
+  const segments = path.replace(/^\/+/, "").split("/");
+  for (const seg of segments) {
+    if (seg === "" || seg === "." || seg === "..") {
+      throw new Error(`Invalid note path ${JSON.stringify(path)}: segments must not be empty, "." or "..".`);
+    }
+  }
+  return segments.map((seg) => encodeURIComponent(seg)).join("/");
 }
 
 export class ObsidianClient implements NoteStore {
@@ -53,7 +61,7 @@ export class ObsidianClient implements NoteStore {
     this.fetchImpl = opts.fetch ?? fetch;
   }
 
-  getActiveNote(): Promise<string> {
+  async getActiveNote(): Promise<string> {
     return this.readMarkdown("/active/");
   }
 
@@ -61,7 +69,9 @@ export class ObsidianClient implements NoteStore {
     await this.send("POST", "/active/", markdown);
   }
 
-  getNote(path: string): Promise<string> {
+  // `async` so the synchronous path validation in encodeVaultPath surfaces as a rejected
+  // promise (a consistent contract) rather than a throw at the call site.
+  async getNote(path: string): Promise<string> {
     return this.readMarkdown(`/vault/${encodeVaultPath(path)}`);
   }
 
