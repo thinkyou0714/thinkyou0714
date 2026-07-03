@@ -9,7 +9,10 @@ I run [**THINK YOU LAB**](https://github.com/thinkyou0714/lab-public) — a one-
 ## Currently working on
 
 - 🧰 [`ccmux`](https://github.com/thinkyou0714/ccmux) — Claude Code multiplexer (Zellij × git worktree × Obsidian)
-- 📝 [`github-flow-kit`](https://github.com/thinkyou0714/github-flow-kit) — 4 Claude Code skills for GitHub-native devs (pr-respond, release-notes, issue-triage, repo-tour)
+- 📝 [`github-flow-kit`](https://github.com/thinkyou0714/github-flow-kit) — 6 Claude Code skills for GitHub-native devs (pr-respond, release-notes, issue-triage, repo-tour, gh-pr-perm-audit, gh-repo-security-audit)
+- 🧪 [`fugu`](https://github.com/thinkyou0714/fugu) — Zero-dep TS client + CLI for the Sakana Fugu API
+- 🛠️ [`codex-toolkit`](https://github.com/thinkyou0714/codex-toolkit) — Portable installable dev OS for the Codex CLI
+- 🧠 [`claude-lab-skills`](https://github.com/thinkyou0714/claude-lab-skills) — Reusable thinking/design skills (思考OS) for Claude Code
 - 🌐 [`public-docs`](https://github.com/thinkyou0714/public-docs) — Next.js + MDX template implementation guides
 - ✍️ [`zenn-content`](https://github.com/thinkyou0714/zenn-content) — Zenn 記事ソース (AI 自動化・LAB infra)
 
@@ -30,7 +33,7 @@ I run [**THINK YOU LAB**](https://github.com/thinkyou0714/lab-public) — a one-
 
 - 📨 Issues & PRs welcome on any of the repos above
 - 🌐 Site: [github.com/thinkyou0714](https://github.com/thinkyou0714)
-- ✍️ Zenn: 順次公開予定
+- ✍️ Zenn: 記事公開中 — [`zenn-content`](https://github.com/thinkyou0714/zenn-content)
 
 ## Sponsor
 
